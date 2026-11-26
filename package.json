@@ -1,0 +1,32 @@
+{
+  "name": "sufra",
+  "version": "1.0.0",
+  "description": "Sufra — QR pay-at-table for GCC restaurants (split bill, tips, bank offers)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/migrate.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "build:demo": "node scripts/build-demo.js",
+    "audit:deps": "npm audit --omit=dev"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/rate-limit": "^11.3.0",
+    "@fastify/static": "^10.1.12",
+    "fastify": "^5.12.8",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
