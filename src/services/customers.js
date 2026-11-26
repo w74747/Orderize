@@ -25,7 +25,8 @@ export async function requestOtp(ctx, { country, phone, ip }) {
   );
   if (lim.recent > 0) throw new HttpError(429, 'OTP_WAIT');
   if (lim.by_phone >= 3 || lim.by_ip >= 10) throw new HttpError(429, 'RATE_LIMITED');
-  if (!whatsapp.live && !config.OTP_DEV_ECHO) throw new HttpError(503, 'WHATSAPP_NOT_CONFIGURED');
+  const live = whatsapp.live;
+  if (!live && !config.OTP_DEV_ECHO) throw new HttpError(503, 'WHATSAPP_NOT_CONFIGURED');
 
   const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
   const id = crypto.randomUUID();
@@ -34,7 +35,7 @@ export async function requestOtp(ctx, { country, phone, ip }) {
      VALUES ($1,$2,$3,$4, now() + make_interval(mins => $5))`,
     [id, e164, codeHash(config, id, code), ip, OTP_TTL_MIN],
   );
-  if (whatsapp.live) {
+  if (live) {
     const r = await whatsapp.sendOtp(e164, code);
     if (!r.sent) throw new HttpError(502, 'WHATSAPP_SEND_FAILED');
   }
@@ -43,7 +44,7 @@ export async function requestOtp(ctx, { country, phone, ip }) {
     challenge_id: id,
     expires_in: OTP_TTL_MIN * 60,
     phone_hint: `${e164.slice(0, 4)}•••${e164.slice(-3)}`,
-    ...(config.OTP_DEV_ECHO && !whatsapp.live ? { dev_code: code } : {}),
+    ...(config.OTP_DEV_ECHO && !live ? { dev_code: code } : {}),
   };
 }
 

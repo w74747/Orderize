@@ -4,7 +4,7 @@
 // nothing is sent (used for development and the demo).
 import { sha256 } from './crypto.js';
 
-export function createWhatsApp(config, pool, log) {
+export function createWhatsApp(config, pool, log, waweb = null) {
   const live = Boolean(config.WHATSAPP_TOKEN && config.WHATSAPP_PHONE_NUMBER_ID);
   const url = `https://graph.facebook.com/${config.WHATSAPP_API_VERSION}/${config.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
@@ -46,8 +46,20 @@ export function createWhatsApp(config, pool, log) {
   }
 
   return {
-    live,
-    sendOtp(phone, code, lang = config.WHATSAPP_OTP_LANG) {
+    /** Official Cloud API configured, or (test only) a personal number linked by QR. */
+    get live() { return live || Boolean(waweb?.connected); },
+    async sendOtp(phone, code, lang = config.WHATSAPP_OTP_LANG) {
+      if (!live && waweb?.connected) {
+        try {
+          await waweb.sendText(phone, `رمز الدخول إلى Orderize: ${code}\nYour Orderize sign-in code: ${code}\nلا تشاركه مع أحد · Do not share it.`);
+          await record(phone, 'web_otp', 'sent');
+          return { sent: true };
+        } catch (e) {
+          log.warn({ err: e.message }, 'whatsapp web send failed');
+          await record(phone, 'web_otp', 'failed', e.message);
+          return { sent: false, error: true };
+        }
+      }
       return send(phone, config.WHATSAPP_OTP_TEMPLATE, lang, [
         { type: 'body', parameters: [{ type: 'text', text: code }] },
         { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: code }] },
@@ -55,7 +67,8 @@ export function createWhatsApp(config, pool, log) {
     },
     /** Marketing message (coupon). Only call for customers who opted in. */
     sendCoupon(phone, { restaurant, title }) {
-      if (!config.WHATSAPP_COUPON_TEMPLATE) return { sent: false };
+      // Never send marketing from a personal test number (fastest way to get it banned).
+      if (!live || !config.WHATSAPP_COUPON_TEMPLATE) return { sent: false };
       return send(phone, config.WHATSAPP_COUPON_TEMPLATE, config.WHATSAPP_OTP_LANG, [
         { type: 'body', parameters: [{ type: 'text', text: restaurant }, { type: 'text', text: title }] },
       ]);

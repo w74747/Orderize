@@ -78,3 +78,17 @@ test/                 اختبارات الحسابات والأمان
 - اتفاقية تاجر مع بوابة الدفع، وتحقق من أسماء الحقول في توثيقها الحالي (`src/payments/tap.js`, `checkout.js`).
 - اتفاقيات عروض مع البنوك (البنوك في البيانات التجريبية وهمية).
 - اختبار اختراق خارجي + شهادة PCI SAQ-A + مراجعة قوانين حماية البيانات في كل دولة.
+
+## WhatsApp test link by QR (temporary, test only)
+
+While Meta's WhatsApp Cloud API approval is pending, sign-in codes can be sent from a regular WhatsApp number linked by QR.
+
+1. Set `WHATSAPP_WEB_ENABLED=true` and redeploy. In real production (no `ALLOW_SANDBOX_IN_PRODUCTION=true`) the server refuses to start with this setting.
+2. Sign in to `/platform` as the platform admin, open **WhatsApp (test)** and choose **Link a number**.
+3. On the phone, go to WhatsApp → Settings → Linked devices → Link a device, and scan the QR.
+
+Notes:
+- This uses an unofficial client (Baileys), and WhatsApp may ban numbers used this way. Use a spare number.
+- Only sign-in codes are sent (no coupons or marketing), with a limit of 10 per minute and 200 per day.
+- The session keys are stored encrypted (AES-256-GCM) in `wa_web_auth`. **Unlink & forget** removes the device and deletes them.
+- When `WHATSAPP_TOKEN` (Cloud API) is set, it takes priority automatically.

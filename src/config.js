@@ -38,6 +38,8 @@ const schema = z
     WHATSAPP_COUPON_TEMPLATE: z.string().optional(),
     // DEMO ONLY: return the sign-in code in the API response when WhatsApp isn't configured.
     OTP_DEV_ECHO: bool.default(false),
+    // TEST ONLY: link a regular WhatsApp number by QR (unofficial client). Refused in real production.
+    WHATSAPP_WEB_ENABLED: bool.default(false),
     // First platform administrator, created at boot if none exists.
     PLATFORM_ADMIN_EMAIL: z.email().optional(),
     PLATFORM_ADMIN_PASSWORD: z.string().min(12).optional(),
@@ -60,6 +62,9 @@ const schema = z
     }
     if (c.NODE_ENV === 'production' && c.OTP_DEV_ECHO && process.env.ALLOW_SANDBOX_IN_PRODUCTION !== 'true') {
       ctx.addIssue({ code: 'custom', message: 'OTP_DEV_ECHO is a demo setting and is refused in real production' });
+    }
+    if (c.NODE_ENV === 'production' && c.WHATSAPP_WEB_ENABLED && process.env.ALLOW_SANDBOX_IN_PRODUCTION !== 'true') {
+      ctx.addIssue({ code: 'custom', message: 'WHATSAPP_WEB_ENABLED is a test-only setting and is refused in real production' });
     }
     if (c.OTP_DEV_ECHO && c.WHATSAPP_TOKEN) {
       ctx.addIssue({ code: 'custom', message: 'OTP_DEV_ECHO must be off when WhatsApp is configured' });

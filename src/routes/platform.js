@@ -166,6 +166,39 @@ export default async function platformRoutes(app, { ctx, auth }) {
     return { ok: true };
   });
 
+  // ---- TEST-ONLY WhatsApp link by QR (personal number)
+  const wa = () => {
+    if (!ctx.waweb) throw new HttpError(404, 'WHATSAPP_WEB_DISABLED');
+    return ctx.waweb;
+  };
+  app.get('/api/platform/whatsapp', { preHandler: guard }, async () => ({
+    enabled: Boolean(ctx.waweb), official: Boolean(config.WHATSAPP_TOKEN),
+    ...(ctx.waweb ? await ctx.waweb.status() : {}),
+  }));
+  app.post('/api/platform/whatsapp/connect', { preHandler: guard }, async (req) => {
+    await wa().start();
+    await log(req, 'platform.whatsapp_web_connect');
+    return { ok: true };
+  });
+  app.post('/api/platform/whatsapp/disconnect', { preHandler: guard }, async (req) => {
+    await wa().logout();
+    await log(req, 'platform.whatsapp_web_unlinked');
+    return { ok: true };
+  });
+  app.post('/api/platform/whatsapp/test', { preHandler: guard, config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } }, async (req) => {
+    const { normalizePhone } = await import('../lib/phone.js');
+    const b = z.strictObject({ country: z.string().max(5), phone: z.string().max(20) }).parse(req.body);
+    const e164 = normalizePhone(b.country, b.phone);
+    if (!e164) throw new HttpError(422, 'INVALID_PHONE');
+    try {
+      await wa().sendText(e164, 'Orderize: test message ✅ — WhatsApp sign-in codes will be sent from this number.');
+    } catch (e) {
+      throw new HttpError(502, e.message === 'send limit' ? 'SEND_LIMIT' : 'WHATSAPP_NOT_CONNECTED');
+    }
+    await log(req, 'platform.whatsapp_web_test');
+    return { ok: true };
+  });
+
   app.get('/api/platform/plans', { preHandler: guard }, async () => ({ plans: (await pool.query('SELECT * FROM plans ORDER BY created_at')).rows }));
 
   app.post('/api/platform/plans', { preHandler: guard }, async (req, reply) => {

@@ -17,6 +17,7 @@ import { oauthCallbackRoutes } from './routes/integrations.js';
 import meRoutes from './routes/me.js';
 import { mediaRoutes } from './routes/menu.js';
 import { createWhatsApp } from './lib/whatsapp.js';
+import { createWaWeb } from './lib/waweb.js';
 import { runBirthdayCampaigns } from './services/campaigns.js';
 import publicRoutes from './routes/public.js';
 import webhookRoutes from './routes/webhooks.js';
@@ -43,7 +44,8 @@ export async function buildApp({ config, pool, logger = true }) {
     pool, config, provider: createProvider(config), cipher: makeCipher(config.APP_SECRET), log: app.log,
     connectors: createConnectors(config),
   };
-  ctx.whatsapp = createWhatsApp(config, pool, app.log);
+  ctx.waweb = config.WHATSAPP_WEB_ENABLED ? createWaWeb({ pool, cipher: ctx.cipher, log: app.log }) : null;
+  ctx.whatsapp = createWhatsApp(config, pool, app.log, ctx.waweb);
   app.decorate('ctx', ctx);
 
   await app.register(helmet, {
@@ -110,7 +112,7 @@ export async function buildApp({ config, pool, logger = true }) {
   // Birthday coupons: idempotent per customer per year, so running often is safe.
   const bday = setInterval(() => runBirthdayCampaigns(ctx).catch((e) => app.log.error(e)), 6 * 3600_000);
   bday.unref();
-  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); clearInterval(bday); });
+  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); clearInterval(bday); await ctx.waweb?.stop(); });
 
   return app;
 }

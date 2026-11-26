@@ -14,6 +14,7 @@ if (process.env.RUN_SEED === 'true') {
 }
 const app = await buildApp({ config, pool });
 await bootstrapPlatformAdmin(pool, config, app.log);
+await app.ctx.waweb?.resume().catch((e) => app.log.error(e)); // reconnect a linked test number
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, async () => {

@@ -30,8 +30,9 @@ const field = (label, input) => h('label', null, label, input);
 async function render() {
   const o = await api('GET', '/api/platform/overview');
   plans = (await api('GET', '/api/platform/plans')).plans;
-  const tabs = [['restaurants', 'Restaurants & subscriptions'], ['offers', 'Bank offers'], ['plans', 'Plans']];
-  const views = { restaurants: viewRestaurants, offers: viewOffers, plans: viewPlans };
+  const tabs = [['restaurants', 'Restaurants & subscriptions'], ['offers', 'Bank offers'], ['plans', 'Plans'], ['whatsapp', 'WhatsApp (test)']];
+  const views = { restaurants: viewRestaurants, offers: viewOffers, plans: viewPlans, whatsapp: viewWhatsApp };
+  clearTimeout(waTimer);
   root.replaceChildren(h('div', { class: 'shell' },
     h('header', { class: 'bar' }, h('strong', null, 'Orderize · Platform console'),
       h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', '/api/admin/logout', {}); location.assign('/admin'); } }, 'Sign out')),
@@ -203,3 +204,46 @@ async function viewPlans() {
     root.replaceChildren(h('p', { class: 'center' }, `Error: ${e.code ?? 'unknown'}`));
   }
 })();
+
+// ---------- WhatsApp test link (personal number by QR)
+let waTimer = null;
+async function viewWhatsApp() {
+  const box = h('div', { class: 'card wide' });
+  const note = h('p', { class: 'note' });
+  const country = h('select', null, [['968', 'OM +968'], ['971', 'AE +971'], ['966', 'SA +966'], ['974', 'QA +974'], ['965', 'KW +965'], ['973', 'BH +973']].map(([v, l]) => h('option', { value: v }, l)));
+  const phone = h('input', { inputmode: 'tel', placeholder: 'Test phone number' });
+  const act = (fn) => async () => { try { await fn(); } catch (e) { msg(note, e.code || 'ERROR'); } };
+
+  async function paint() {
+    if (tab !== 'whatsapp') return;
+    const s = await api('GET', '/api/platform/whatsapp').catch(() => ({ enabled: false }));
+    const warn = h('div', { class: 'note err' },
+      'TEST ONLY. This links a regular WhatsApp number through an unofficial client. WhatsApp may ban numbers used this way. ',
+      'Use a spare number, not your main one. Only sign-in codes are sent (no marketing, max 10/min, 200/day). ',
+      'For launch, switch to the official WhatsApp Cloud API (WHATSAPP_TOKEN).');
+    const kids = [h('h3', null, 'WhatsApp — link by QR (test)'), warn];
+    if (s.official) kids.push(h('p', { class: 'note ok' }, 'The official WhatsApp Cloud API is configured and takes priority for sign-in codes.'));
+    if (!s.enabled) {
+      kids.push(h('p', null, 'Disabled. Set WHATSAPP_WEB_ENABLED=true in the server variables, redeploy, then come back here.'));
+    } else {
+      const label = { disconnected: 'Not linked', connecting: 'Connecting…', qr: 'Scan the QR code', connected: `Linked · ${s.number ?? ''}` }[s.state] ?? s.state;
+      kids.push(h('p', null, h('strong', null, 'Status: '), label, s.state === 'connected' ? ` · ${s.sent_last_24h ?? 0} sent in 24h` : ''));
+      if (s.qr_svg) {
+        kids.push(h('div', { class: 'qr' }, h('img', { alt: 'WhatsApp link QR', width: '260', height: '260', src: `data:image/svg+xml;base64,${btoa(s.qr_svg)}` })),
+          h('p', { class: 'note' }, 'On the phone: WhatsApp → Settings → Linked devices → Link a device, then scan.'));
+      }
+      if (s.state === 'disconnected') kids.push(h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/api/platform/whatsapp/connect', {}); paint(); }) }, 'Link a number'));
+      if (s.state !== 'disconnected') kids.push(h('button', { class: 'btn soft', onclick: act(async () => { await api('POST', '/api/platform/whatsapp/disconnect', {}); paint(); }) }, 'Unlink & forget'));
+      if (s.state === 'connected') {
+        kids.push(h('div', { class: 'form' }, h('h3', null, 'Send a test message'), country, phone,
+          h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/api/platform/whatsapp/test', { country: country.value, phone: phone.value }); msg(note, 'Sent ✓', true); }) }, 'Send test')));
+      }
+      clearTimeout(waTimer);
+      if (s.state === 'connecting' || s.state === 'qr') waTimer = setTimeout(paint, 3000);
+    }
+    kids.push(note);
+    box.replaceChildren(...kids);
+  }
+  await paint();
+  return h('div', { class: 'grid' }, box);
+}
