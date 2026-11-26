@@ -15,6 +15,7 @@ import { processWritebacks } from './pos/service.js';
 import { PosError } from './pos/http.js';
 import { oauthCallbackRoutes } from './routes/integrations.js';
 import meRoutes from './routes/me.js';
+import { mediaRoutes } from './routes/menu.js';
 import { createWhatsApp } from './lib/whatsapp.js';
 import { runBirthdayCampaigns } from './services/campaigns.js';
 import publicRoutes from './routes/public.js';
@@ -99,6 +100,7 @@ export async function buildApp({ config, pool, logger = true }) {
   await app.register(posRoutes, { ctx });
   await app.register(oauthCallbackRoutes, { ctx });
   await app.register(meRoutes, { ctx });
+  await app.register(mediaRoutes, { ctx });
   if (config.PAYMENT_PROVIDER === 'sandbox') await app.register(sandboxRoutes, { ctx });
 
   const timer = setInterval(() => expireStalePayments(pool).catch((e) => app.log.error(e)), 60_000);

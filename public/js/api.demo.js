@@ -10,7 +10,7 @@ function fresh() {
     restaurant: {
       slug: 'sahab-cafe', name_en: 'Sahab Café', name_ar: 'مقهى سحاب', currency: 'AED', logo_url: null, cover_url: null,
       brand_color: '#0b4f7c',
-      menu: [
+      menu: { pdf: null, images: [], categories: [
         { name_en: 'Breakfast', name_ar: 'الفطور', items: [
           { name_en: 'Avo Toast With Poached Egg', name_ar: 'توست أفوكادو مع بيض مسلوق', price_minor: 5400 },
           { name_en: 'Shakshuka', name_ar: 'شكشوكة', price_minor: 4200 },
@@ -19,7 +19,7 @@ function fresh() {
           { name_en: 'Spanish Latte Hot', name_ar: 'سبانش لاتيه ساخن', price_minor: 3200 },
           { name_en: 'Berry Cloudy', name_ar: 'بيري كلاودي', price_minor: 4100 },
           { name_en: 'Karak Tea', name_ar: 'شاي كرك', price_minor: 1200 }] },
-      ],
+      ] },
     },
     table: { label: 'S1 T1' },
     policy: { tip_percents: [5, 7, 10], default_tip_percent: 7, max_tip_percent: 50, fee_bps: 175, fee_fixed_minor: 0, fee_cap_minor: null },

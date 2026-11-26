@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import integrationRoutes from './integrations.js';
 import crmRoutes from './crm.js';
 import platformRoutes from './platform.js';
+import menuRoutes from './menu.js';
 
 export default async function adminRoutes(app, { ctx }) {
   const { pool, config, cipher } = ctx;
@@ -21,7 +22,11 @@ export default async function adminRoutes(app, { ctx }) {
   app.addHook('onRequest', async (req) => {
     if (req.method === 'GET' || req.method === 'HEAD') return;
     if (req.headers.origin !== origin) throw new HttpError(403, 'BAD_ORIGIN');
-    if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) throw new HttpError(415, 'JSON_ONLY');
+    const type = String(req.headers['content-type'] ?? '').split(';')[0].trim();
+    const upload = req.method === 'PUT' && req.url.split('?')[0] === '/api/admin/menu/files'
+      && ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(type);
+    const emptyDelete = req.method === 'DELETE' && !Number(req.headers['content-length'] ?? 0);
+    if (type !== 'application/json' && !upload && !emptyDelete) throw new HttpError(415, 'JSON_ONLY');
   });
 
   app.addHook('onSend', async (req, reply) => {
@@ -220,6 +225,7 @@ export default async function adminRoutes(app, { ctx }) {
 
   await integrationRoutes(app, { ctx, auth, rid });
   await crmRoutes(app, { ctx, auth, rid });
+  await menuRoutes(app, { ctx, auth, rid });
   await platformRoutes(app, { ctx, auth });
 
   app.get('/api/admin/audit', { preHandler: auth('owner') }, async (req) => {

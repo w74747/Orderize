@@ -91,6 +91,25 @@ export async function seed(pool, { ownerPassword, quiet = false } = {}) {
       [r.id],
     );
 
+    // Managed menu (only the first time, so restaurant edits are never overwritten).
+    const hasMenu = (await c.query('SELECT 1 FROM menu_categories WHERE restaurant_id = $1 LIMIT 1', [r.id])).rowCount;
+    if (!hasMenu) {
+      let cp = 0;
+      for (const cat of menu) {
+        const { rows: [mc] } = await c.query(
+          'INSERT INTO menu_categories(restaurant_id, name_en, name_ar, position) VALUES ($1,$2,$3,$4) RETURNING id',
+          [r.id, cat.name_en, cat.name_ar, cp++],
+        );
+        let ip = 0;
+        for (const it of cat.items) {
+          await c.query(
+            'INSERT INTO menu_items(restaurant_id, category_id, name_en, name_ar, price_minor, position) VALUES ($1,$2,$3,$4,$5,$6)',
+            [r.id, mc.id, it.name_en, it.name_ar, it.price_minor, ip++],
+          );
+        }
+      }
+    }
+
     // Sample plans + subscriptions (managed from the platform console).
     const plan = async (name, price, cur) => (await c.query(
       `INSERT INTO plans(name, price_minor, currency, interval, features)

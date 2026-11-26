@@ -51,3 +51,14 @@ th, td { text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--lin
 .bar i { display: block; height: 100%; background: #0b4f7c; border-radius: 6px; }
 label.check { display: flex; gap: 8px; align-items: center; color: var(--ink); }
 label.check input { width: auto; }
+.picker { display: grid; gap: 8px; max-height: 220px; overflow: auto; padding: 8px; background: var(--soft); border-radius: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.chip-btn { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.chip-btn:hover { border-color: var(--ink); }
+.thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.thumb { display: grid; gap: 4px; justify-items: center; width: 110px; }
+.thumb img { width: 110px; height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+.thumb .pdf { width: 110px; height: 140px; display: grid; place-items: center; background: #fde8e8; color: var(--bad); border-radius: 8px; font-weight: 700; text-decoration: none; }
+.add-item { grid-template-columns: 2fr 2fr 1fr 2fr auto; }
+textarea { font: inherit; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; width: 100%; }
+.block { display: block; }

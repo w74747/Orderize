@@ -175,7 +175,7 @@ function viewHome() {
       b && remainingOf({ ...b }) > 0
         ? h('button', { class: 'btn primary big', onclick: () => go('pay') }, icon(I.receipt), `${t('payNow')} · ${money(b.remaining_minor)}`)
         : statusBox(),
-      r.menu?.length ? h('button', { class: 'btn soft big', onclick: () => go('menu') }, icon(I.menu), t('viewMenu')) : null,
+      hasMenu(r.menu) ? h('button', { class: 'btn soft big', onclick: () => go('menu') }, icon(I.menu), t('viewMenu')) : null,
       h('p', { class: 'powered' }, 'Orderize', h('small', null, t('terms'))),
     ),
   );
@@ -192,15 +192,26 @@ function safeImg(url, cls) {
   return h('img', { src: url, alt: '', class: cls, referrerpolicy: 'no-referrer', loading: 'lazy' });
 }
 
+const hasMenu = (m) => Boolean(m && (m.categories?.length || m.pdf || m.images?.length));
+
 function viewMenu() {
+  const m = S.data.restaurant.menu;
+  const desc = (it) => (S.lang === 'ar' ? it.description_ar || it.description_en : it.description_en || it.description_ar);
   return h('div', { class: 'page' },
-    topBar({ back: () => go('home') }),
+    topBar({ back: () => go(S.data.require_phone && !S.data.me ? 'login' : 'home') }),
+    m.pdf ? h('section', { class: 'card' },
+      h('a', { class: 'btn soft big', href: `/media/${m.pdf}`, target: '_blank', rel: 'noopener' }, icon(I.menu), t('openPdf'))) : null,
     h('div', { class: 'menu' },
-      S.data.restaurant.menu.map((cat) => h('section', { class: 'card' },
+      m.categories.map((cat) => h('section', { class: 'card' },
         h('h2', null, nm(cat)),
-        cat.items.map((it) => h('div', { class: 'row' }, h('span', null, nm(it)), h('span', { class: 'num' }, money(it.price_minor)))),
+        cat.items.map((it) => h('div', { class: 'menu-item' },
+          h('div', { class: 'row' }, h('strong', null, nm(it)), h('span', { class: 'num' }, money(it.price_minor))),
+          desc(it) ? h('small', { class: 'muted' }, desc(it)) : null)),
       )),
     ),
+    m.images?.length ? h('section', { class: 'card' }, h('h2', null, t('menuPhotos')),
+      m.images.map((id) => h('a', { href: `/media/${id}`, target: '_blank', rel: 'noopener' },
+        h('img', { class: 'menu-page', src: `/media/${id}`, alt: t('menu'), loading: 'lazy' })))) : null,
     S.data.bill?.remaining_minor > 0 ? h('div', { class: 'dock' }, h('button', { class: 'btn primary big', onclick: () => go('pay') }, t('payNow'))) : null,
   );
 }
@@ -512,7 +523,8 @@ function viewLogin() {
   };
   return authShell(t('signInTitle'), t('signInSub'),
     h('label', { class: 'field' }, t('phone'), h('div', { class: 'phone-row', dir: 'ltr' }, sel, inp)),
-    h('button', { class: 'btn primary big', disabled: S.busy, onclick: send }, t('sendCode')));
+    h('button', { class: 'btn primary big', disabled: S.busy, onclick: send }, t('sendCode')),
+    hasMenu(S.data.restaurant.menu) ? h('button', { class: 'btn soft big', onclick: () => go('menu') }, icon(I.menu), t('viewMenu')) : null);
 }
 
 function viewOtp() {

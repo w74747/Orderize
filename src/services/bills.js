@@ -3,6 +3,7 @@ import { tx } from '../db.js';
 import { audit } from '../lib/audit.js';
 import { BillingError, CURRENCIES, quote, remainingOf } from '../../shared/billing.js';
 import { syncTableBill } from '../pos/service.js';
+import { publicMenu } from '../routes/menu.js';
 
 export class HttpError extends Error {
   constructor(status, code) {
@@ -145,7 +146,7 @@ export async function publicView(ctx, token, customer = null) {
   return {
     restaurant: {
       slug: r.slug, name_en: r.name_en, name_ar: r.name_ar, currency: r.currency,
-      logo_url: r.logo_url, cover_url: r.cover_url, brand_color: r.brand_color, menu: r.menu,
+      logo_url: r.logo_url, cover_url: r.cover_url, brand_color: r.brand_color, menu: await publicMenu(db, r),
     },
     table: { label: r.label },
     pos_unavailable: Boolean(sync.stale),

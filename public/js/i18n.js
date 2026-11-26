@@ -1,5 +1,6 @@
 export const STR = {
   en: {
+    openPdf: 'Open the menu (PDF)', menuPhotos: 'Menu', 
     signInTitle: 'Sign in to pay', signInSub: 'We will send a 6-digit code to your WhatsApp.', phone: 'Mobile number',
     sendCode: 'Send code via WhatsApp', codeTitle: 'Enter the code', codeSub: 'Sent on WhatsApp to', verify: 'Verify',
     resend: 'Resend code', resendIn: 'Resend in', changeNumber: 'Change number', demoCode: 'Demo code (WhatsApp not connected):',
@@ -43,6 +44,7 @@ export const STR = {
     },
   },
   ar: {
+    openPdf: 'فتح المنيو (PDF)', menuPhotos: 'صور المنيو',
     signInTitle: 'سجّل دخولك للدفع', signInSub: 'سنرسل رمزاً من 6 أرقام إلى واتساب.', phone: 'رقم الجوال',
     sendCode: 'أرسل الرمز عبر واتساب', codeTitle: 'أدخل الرمز', codeSub: 'أُرسل عبر واتساب إلى', verify: 'تأكيد',
     resend: 'إعادة إرسال الرمز', resendIn: 'إعادة الإرسال بعد', changeNumber: 'تغيير الرقم', demoCode: 'رمز تجريبي (واتساب غير مربوط):',
