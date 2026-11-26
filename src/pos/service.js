@@ -106,7 +106,7 @@ export async function syncTableBill(ctx, restaurant, table, { force = false } = 
     }
     const same = cur && cur.external_ref === remote.external_ref ? cur : null;
 
-    // Money already paid at the POS by other means (cash, card machine), excluding Sufra
+    // Money already paid at the POS by other means (cash, card machine), excluding Orderize
     // payments that staff/auto write-back already recorded there — never count those twice.
     let ours = 0;
     if (same) {

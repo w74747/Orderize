@@ -1,4 +1,4 @@
--- Sufra core schema. Money is BIGINT minor units. IDs are random UUIDs (no enumeration).
+-- Orderize core schema. Money is BIGINT minor units. IDs are random UUIDs (no enumeration).
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE restaurants (

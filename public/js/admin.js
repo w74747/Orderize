@@ -52,7 +52,7 @@ function viewLogin(needTotp = false, prev = {}) {
       msg(out, err.code === 'RATE_LIMITED' ? 'Too many attempts. Wait a minute.' : 'Invalid credentials.');
     }
   } },
-  h('h1', null, 'Sufra · Restaurant'),
+  h('h1', null, 'Orderize · Restaurant'),
   h('label', null, 'Email', email),
   h('label', null, 'Password', password),
   needTotp ? h('label', null, 'Authenticator code', totp) : null,
@@ -311,7 +311,7 @@ async function viewPos() {
         host: h('input', { placeholder: 'https://<your-sts-host>', value: c?.provider === 'simphony' ? c.config.host : '' }),
         org: h('input', { placeholder: 'Org short name' }), loc: h('input', { placeholder: 'Location ref' }),
         rvc: h('input', { placeholder: 'Revenue center ref', inputmode: 'numeric' }),
-        tender_id: h('input', { placeholder: 'Tender id for Sufra payments', inputmode: 'numeric' }),
+        tender_id: h('input', { placeholder: 'Tender id for Orderize payments', inputmode: 'numeric' }),
         employee_ref: h('input', { placeholder: 'Employee ref (API employee)', inputmode: 'numeric' }),
         client_id: h('input', { placeholder: 'API account client id', autocomplete: 'off' }),
         refresh_token: h('input', { placeholder: 'API account refresh token', type: 'password', autocomplete: 'off' }),
@@ -324,7 +324,7 @@ async function viewPos() {
         } }, 'Test & connect')));
 
       parts.push(h('div', { class: 'card' }, h('h3', null, 'Loyverse & other POS'),
-        h('p', null, "Loyverse's API exposes only closed receipts, not open tickets, so bills can't be read live. Use this mode: bills come from this dashboard or the signed POS API, and every Sufra payment is listed below for staff to record in the POS."),
+        h('p', null, "Loyverse's API exposes only closed receipts, not open tickets, so bills can't be read live. Use this mode: bills come from this dashboard or the signed POS API, and every Orderize payment is listed below for staff to record in the POS."),
         h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', '/api/admin/integration/manual', {}); flash = 'Manual reconciliation enabled.'; render(); } }, 'Use manual reconciliation')));
     }
   }

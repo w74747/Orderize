@@ -20,7 +20,7 @@ before(async () => {
   const config = loadConfig({
     NODE_ENV: 'test', DATABASE_URL: process.env.TEST_DATABASE_URL, PUBLIC_BASE_URL: BASE,
     APP_SECRET: crypto.randomBytes(48).toString('base64'), COOKIE_SECURE: 'false', TRUST_PROXY: 'false', LOG_LEVEL: 'silent',
-    OTP_DEV_ECHO: 'true', PLATFORM_ADMIN_EMAIL: 'root@sufra.example', PLATFORM_ADMIN_PASSWORD: 'PlatformRoot2026!', PLATFORM_REQUIRE_2FA: 'false',
+    OTP_DEV_ECHO: 'true', PLATFORM_ADMIN_EMAIL: 'root@orderize.example', PLATFORM_ADMIN_PASSWORD: 'PlatformRoot2026!', PLATFORM_REQUIRE_2FA: 'false',
   });
   pool = createPool(config.DATABASE_URL);
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
@@ -34,7 +34,7 @@ after(async () => { await app.close(); await pool.end(); });
 async function login(email, password) {
   const r = await app.inject({ method: 'POST', url: '/api/admin/login', headers: ORIGIN, payload: { email, password }, remoteAddress: ip() });
   assert.equal(r.statusCode, 200, r.body);
-  return { sufra_sid: r.cookies.find((c) => c.name === 'sufra_sid').value };
+  return { orderize_sid: r.cookies.find((c) => c.name === 'orderize_sid').value };
 }
 const as = (cookies) => (method, url, payload) => app.inject({ method, url, cookies, headers: ORIGIN, remoteAddress: ip(), ...(payload !== undefined ? { payload } : {}) });
 
@@ -44,7 +44,7 @@ async function signIn(local, { country = '971', profile } = {}) {
   const { challenge_id, dev_code } = r.json();
   const v = await app.inject({ method: 'POST', url: '/api/me/otp/verify', headers: ORIGIN, payload: { challenge_id, code: dev_code }, remoteAddress: ip() });
   assert.equal(v.statusCode, 200, v.body);
-  const cookies = { sufra_diner: v.cookies.find((c) => c.name === 'sufra_diner').value };
+  const cookies = { orderize_diner: v.cookies.find((c) => c.name === 'orderize_diner').value };
   if (profile) assert.equal((await as(cookies)('PUT', '/api/me/profile', profile)).statusCode, 200);
   return { cookies, needs_profile: v.json().needs_profile };
 }
@@ -199,7 +199,7 @@ test('restaurant CRM: counts, frequency and masked phones', async () => {
 
 test('platform console: only the platform admin; creates restaurants, suspends, manages bank offers', async () => {
   assert.equal((await as(owner)('GET', '/api/platform/overview')).statusCode, 403);
-  const root = as(await login('root@sufra.example', 'PlatformRoot2026!'));
+  const root = as(await login('root@orderize.example', 'PlatformRoot2026!'));
   assert.equal((await root('GET', '/api/platform/overview')).statusCode, 200);
 
   const plan = (await root('POST', '/api/platform/plans', { name: 'Pro', price_minor: 49900, currency: 'OMR', interval: 'month' })).json();

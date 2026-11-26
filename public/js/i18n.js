@@ -89,12 +89,12 @@ export const STR = {
 
 export function detectLang() {
   try {
-    const saved = localStorage.getItem('sufra_lang');
+    const saved = localStorage.getItem('orderize_lang');
     if (saved === 'ar' || saved === 'en') return saved;
   } catch {}
   return (navigator.language || '').startsWith('ar') ? 'ar' : 'en';
 }
 
 export function saveLang(l) {
-  try { localStorage.setItem('sufra_lang', l); } catch {}
+  try { localStorage.setItem('orderize_lang', l); } catch {}
 }

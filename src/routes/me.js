@@ -3,7 +3,7 @@ import { HttpError, ratePayment } from '../services/bills.js';
 import { accountView, customerFromToken, deleteAccount, publicCustomer, requestOtp, updateProfile, verifyOtp } from '../services/customers.js';
 import { sha256 } from '../lib/crypto.js';
 
-export const dinerCookie = (config) => (config.COOKIE_SECURE ? '__Host-sufra_diner' : 'sufra_diner');
+export const dinerCookie = (config) => (config.COOKIE_SECURE ? '__Host-orderize_diner' : 'orderize_diner');
 
 /** Resolves the signed-in diner (or null) from the diner cookie. */
 export const getDiner = (ctx, req) => customerFromToken(ctx.pool, req.cookies[dinerCookie(ctx.config)]);

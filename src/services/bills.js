@@ -63,7 +63,7 @@ async function hydrate(db, bill) {
   const sq = new Map(settledItems.rows.map((r) => [r.id, r.q]));
   return {
     ...bill,
-    // Paid in Sufra (captured or being paid now) + paid directly at the POS (cash, card machine).
+    // Paid in Orderize (captured or being paid now) + paid directly at the POS (cash, card machine).
     settled_minor: settled.rows[0].s + (bill.external_paid_minor ?? 0),
     payments_count: paidCount.rows[0].n,
     items: items.rows.map((i) => ({ ...i, settled_qty: sq.get(i.id) ?? 0 })),

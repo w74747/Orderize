@@ -33,7 +33,7 @@ async function render() {
   const tabs = [['restaurants', 'Restaurants & subscriptions'], ['offers', 'Bank offers'], ['plans', 'Plans']];
   const views = { restaurants: viewRestaurants, offers: viewOffers, plans: viewPlans };
   root.replaceChildren(h('div', { class: 'shell' },
-    h('header', { class: 'bar' }, h('strong', null, 'Sufra · Platform console'),
+    h('header', { class: 'bar' }, h('strong', null, 'Orderize · Platform console'),
       h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', '/api/admin/logout', {}); location.assign('/admin'); } }, 'Sign out')),
     h('section', { class: 'kpis' },
       kpi('Restaurants', `${o.active_restaurants} / ${o.restaurants} active`), kpi('Past due', o.past_due), kpi('Invoices due', o.invoices_due),

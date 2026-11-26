@@ -22,7 +22,7 @@ const css = await readFile(path.join(root, 'public/css/app.css'), 'utf8');
 const html = `<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sufra · سفرة — Demo</title><style>${css}</style></head>
+<title>Orderize — Demo</title><style>${css}</style></head>
 <body><div id="app"></div><script>${js}</script></body></html>`;
 await mkdir(path.join(root, 'demo/dist'), { recursive: true });
 await writeFile(path.join(root, 'demo/dist/index.html'), html);

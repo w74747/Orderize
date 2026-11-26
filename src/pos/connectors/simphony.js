@@ -106,7 +106,7 @@ export function simphonyConnector(platform) {
             tenderId: Number(c.tender_id),
             total: toMajor(payment.share_minor, decimals),
             chargedTipTotal: toMajor(payment.tip_minor, decimals),
-            referenceText: `Sufra ${payment.id.slice(0, 8)}`,
+            referenceText: `Orderize ${payment.id.slice(0, 8)}`,
           }],
         },
       });

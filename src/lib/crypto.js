@@ -41,6 +41,8 @@ export const DUMMY_HASH = await hashPassword(randomToken(16));
 
 // ---- Field encryption (AES-256-GCM) for secrets at rest (TOTP seeds, POS secrets).
 export function makeCipher(appSecret) {
+  // Key-derivation label kept from the project's first name on purpose:
+  // changing it would make every secret already stored in the database unreadable.
   const key = crypto.hkdfSync('sha256', Buffer.from(appSecret), Buffer.alloc(0), 'sufra-field-enc-v1', 32);
   return {
     encrypt(plain) {

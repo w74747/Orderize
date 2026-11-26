@@ -33,7 +33,7 @@ const schema = z
     WHATSAPP_TOKEN: z.string().optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
     WHATSAPP_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default('v21.0'),
-    WHATSAPP_OTP_TEMPLATE: z.string().default('sufra_otp'),
+    WHATSAPP_OTP_TEMPLATE: z.string().default('orderize_otp'),
     WHATSAPP_OTP_LANG: z.string().default('ar'),
     WHATSAPP_COUPON_TEMPLATE: z.string().optional(),
     // DEMO ONLY: return the sign-in code in the API response when WhatsApp isn't configured.

@@ -1,4 +1,4 @@
-// In-browser mock of the Sufra API for the shareable demo. Mirrors the server's rules
+// In-browser mock of the Orderize API for the shareable demo. Mirrors the server's rules
 // (server-side amounts, idempotency, reservations, BIN-restricted bank offers).
 import { quote, BillingError, formatMoney } from '../shared/billing.js';
 
@@ -214,7 +214,7 @@ function hostedPage(p) {
     if (card) { p.card_brand = card.startsWith('5') ? 'MASTERCARD' : 'VISA'; p.card_last4 = card.slice(-4); }
     if (status === 'captured' && billState().remaining_minor <= 0) db.closed = true;
     scrim.remove();
-    window.dispatchEvent(new CustomEvent('sufra:return', { detail: p.id }));
+    window.dispatchEvent(new CustomEvent('orderize:return', { detail: p.id }));
   };
   payBtn.addEventListener('click', () => {
     const card = input.value.replace(/\s/g, '');

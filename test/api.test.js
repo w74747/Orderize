@@ -154,7 +154,7 @@ const ORIGIN = { origin: BASE };
 async function loginAs(email, password, extra = {}) {
   return app.inject({ method: 'POST', url: '/api/admin/login', headers: ORIGIN, payload: { email, password, ...extra }, remoteAddress: ip() });
 }
-const cookieOf = (r) => r.cookies.find((c) => c.name === 'sufra_sid');
+const cookieOf = (r) => r.cookies.find((c) => c.name === 'orderize_sid');
 
 test('admin: CSRF — state-changing requests need our Origin', async () => {
   const r = await app.inject({ method: 'POST', url: '/api/admin/login', payload: { email: 'a@b.co', password: 'x' } });
@@ -182,7 +182,7 @@ test('admin: login, httpOnly SameSite=Strict cookie, generic errors, lockout', a
 
 test('admin: tenant isolation — cannot touch another restaurant’s tables', async () => {
   const login = await loginAs('owner@sahab.example', 'CorrectHorse2026');
-  const cookie = { sufra_sid: cookieOf(login).value };
+  const cookie = { orderize_sid: cookieOf(login).value };
   const { rows: [other] } = await pool.query(
     `SELECT t.id FROM dining_tables t JOIN restaurants r ON r.id = t.restaurant_id WHERE r.slug = 'qahwat-al-bahr' LIMIT 1`);
   const qr = await app.inject({ url: `/api/admin/tables/${other.id}/qr.svg`, cookies: cookie });
@@ -195,7 +195,7 @@ test('admin: tenant isolation — cannot touch another restaurant’s tables', a
 
 test('admin: TOTP 2FA enrol + required at login + replay blocked', async () => {
   const login = await loginAs('owner@sahab.example', 'CorrectHorse2026');
-  const cookie = { sufra_sid: cookieOf(login).value };
+  const cookie = { orderize_sid: cookieOf(login).value };
   const setup = await app.inject({ method: 'POST', url: '/api/admin/2fa/setup', cookies: cookie, headers: ORIGIN, payload: {} });
   const secret = setup.json().secret;
   const code = totpAt(secret, Math.floor(Date.now() / 30000));
@@ -216,7 +216,7 @@ test('admin: TOTP 2FA enrol + required at login + replay blocked', async () => {
 test('POS API: signed requests open bills; replay, stale and forged requests are rejected', async () => {
   await resetBill();
   const login = await loginAs('owner@sahab.example', 'CorrectHorse2026');
-  const cookie = { sufra_sid: cookieOf(login).value };
+  const cookie = { orderize_sid: cookieOf(login).value };
   const creds = (await app.inject({ method: 'POST', url: '/api/admin/pos-credentials', cookies: cookie, headers: ORIGIN, payload: {} })).json();
   const body = JSON.stringify({ table_label: 'S1 T2', external_ref: `pos-${key()}`, items: [{ name_en: 'Tea', name_ar: 'شاي', unit_price_minor: 1500, qty: 2 }] });
   const signed = (ts, nonce, secret = creds.pos_secret, url = '/api/pos/v1/bills', method = 'POST', raw = body) => ({

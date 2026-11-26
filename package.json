@@ -1,7 +1,7 @@
 {
-  "name": "sufra",
+  "name": "orderize",
   "version": "1.0.0",
-  "description": "Sufra — QR pay-at-table for GCC restaurants (split bill, tips, bank offers)",
+  "description": "Orderize — QR pay-at-table for GCC restaurants (split bill, tips, bank offers)",
   "type": "module",
   "private": true,
   "engines": {

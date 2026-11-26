@@ -1,7 +1,7 @@
-# Security model — Sufra
+# Security model — Orderize
 
 ## Payments (PCI DSS)
-- **No card data ever touches Sufra servers.** Every provider (Tap, Checkout.com) uses a hosted payment page, which keeps the platform in PCI DSS **SAQ-A** scope. We store only brand, BIN (first 6–8) and last 4 digits.
+- **No card data ever touches Orderize servers.** Every provider (Tap, Checkout.com) uses a hosted payment page, which keeps the platform in PCI DSS **SAQ-A** scope. We store only brand, BIN (first 6–8) and last 4 digits.
 - **Amounts are computed only on the server** (`shared/billing.js`, integer minor units, 2 or 3 decimals per currency). Request schemas are strict: any extra field such as `amount` is rejected.
 - **Webhooks:** HMAC signature checked with constant-time compare, then the payment is **re-fetched from the provider API** and that response is trusted. Amount/currency mismatches are flagged and never mark a bill as paid. Events are de-duplicated (`webhook_events`).
 - **No over-payment:** the bill row is locked (`SELECT … FOR UPDATE`) while a payment is reserved. Reservations count toward the bill for `RESERVATION_TTL_MIN`.

@@ -85,7 +85,7 @@ before(async () => {
   app = await buildApp({ config, pool, logger: false });
   ctx = app.ctx;
   const login = await app.inject({ method: 'POST', url: '/api/admin/login', headers: ORIGIN, payload: { email: 'owner@sahab.example', password: 'CorrectHorse2026' } });
-  cookie = { sufra_sid: login.cookies.find((c) => c.name === 'sufra_sid').value };
+  cookie = { orderize_sid: login.cookies.find((c) => c.name === 'orderize_sid').value };
 });
 after(async () => { await app.close(); await pool.end(); F.srv.close(); S.srv.close(); });
 
@@ -172,7 +172,7 @@ test('Foodics: live bill appears, updates, counts POS-side payments, closes with
   assert.equal(v2.bill.remaining_minor, 9000, 'cash paid at the POS is deducted');
   assert.equal(v2.bill.items.length, 3);
 
-  // Order closed at the cashier with no Sufra payment -> bill disappears.
+  // Order closed at the cashier with no Orderize payment -> bill disappears.
   foodics.orders = [];
   await unfresh();
   assert.equal((await view('Main T10')).bill, null);

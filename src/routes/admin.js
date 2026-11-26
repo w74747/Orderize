@@ -12,7 +12,7 @@ import platformRoutes from './platform.js';
 
 export default async function adminRoutes(app, { ctx }) {
   const { pool, config, cipher } = ctx;
-  const COOKIE = config.COOKIE_SECURE ? '__Host-sufra_sid' : 'sufra_sid';
+  const COOKIE = config.COOKIE_SECURE ? '__Host-orderize_sid' : 'orderize_sid';
   const origin = new URL(config.PUBLIC_BASE_URL).origin;
   const cookieOpts = { path: '/', httpOnly: true, secure: config.COOKIE_SECURE, sameSite: 'strict' };
 
@@ -64,7 +64,7 @@ export default async function adminRoutes(app, { ctx }) {
     if (req.user.totp_enabled) throw new HttpError(409, 'ALREADY_ENABLED');
     const secret = base32Encode(crypto.randomBytes(20));
     await pool.query('UPDATE users SET totp_secret_enc = $2 WHERE id = $1', [req.user.id, cipher.encrypt(secret)]);
-    const uri = `otpauth://totp/Sufra:${encodeURIComponent(req.user.email)}?secret=${secret}&issuer=Sufra`;
+    const uri = `otpauth://totp/Orderize:${encodeURIComponent(req.user.email)}?secret=${secret}&issuer=Orderize`;
     return { secret, otpauth_uri: uri, qr_svg: await QRCode.toString(uri, { type: 'svg', margin: 1 }) };
   });
 

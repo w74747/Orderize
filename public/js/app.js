@@ -1,4 +1,4 @@
-// Sufra diner app. Plain DOM — never innerHTML with data, so restaurant/menu content
+// Orderize diner app. Plain DOM — never innerHTML with data, so restaurant/menu content
 // cannot inject markup or scripts.
 import { api } from './api.js';
 import { STR, detectLang, saveLang } from './i18n.js';
@@ -176,7 +176,7 @@ function viewHome() {
         ? h('button', { class: 'btn primary big', onclick: () => go('pay') }, icon(I.receipt), `${t('payNow')} · ${money(b.remaining_minor)}`)
         : statusBox(),
       r.menu?.length ? h('button', { class: 'btn soft big', onclick: () => go('menu') }, icon(I.menu), t('viewMenu')) : null,
-      h('p', { class: 'powered' }, 'Sufra', h('small', null, t('terms'))),
+      h('p', { class: 'powered' }, 'Orderize', h('small', null, t('terms'))),
     ),
   );
 }
@@ -691,5 +691,5 @@ export async function boot() {
   }
 }
 
-window.addEventListener('sufra:return', (e) => viewReturn(e.detail));
+window.addEventListener('orderize:return', (e) => viewReturn(e.detail));
 boot();
