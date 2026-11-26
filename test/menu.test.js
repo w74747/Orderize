@@ -7,6 +7,7 @@ import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/server.js';
 import { seed } from '../scripts/seed.js';
 import { hashPassword } from '../src/lib/crypto.js';
+import sharp from 'sharp';
 
 const BASE = 'http://localhost:3999';
 const ORIGIN = { origin: BASE };
@@ -15,8 +16,10 @@ let ipN = 1;
 const ip = () => `10.30.${Math.floor(ipN / 250)}.${(ipN++ % 250) + 1}`;
 
 const PDF = Buffer.concat([Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\n'), crypto.randomBytes(200), Buffer.from('\n%%EOF')]);
-const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), crypto.randomBytes(100)]);
-const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), crypto.randomBytes(100)]);
+const img = (fmt) => sharp({ create: { width: 64, height: 48, channels: 3, background: '#c08040' } })[fmt]().toBuffer();
+const PNG = await img('png');
+const JPG = await img('jpeg');
+const FAKE_JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), crypto.randomBytes(100)]);
 
 async function login(email, password) {
   const r = await app.inject({ method: 'POST', url: '/api/admin/login', headers: ORIGIN, payload: { email, password }, remoteAddress: ip() });
@@ -60,7 +63,8 @@ test('managers edit the menu; staff can only toggle availability', async () => {
   assert.equal(ok.statusCode, 201);
   assert.equal((await as(staff)('POST', `/api/admin/menu/items/${ok.json().id}/availability`, { available: false })).statusCode, 200);
   const v = (await app.inject({ url: `/api/t/${S.demoToken}` })).json();
-  assert.ok(!JSON.stringify(v.restaurant.menu).includes('Halloumi'), 'sold-out items are hidden from diners');
+  const wrap = v.restaurant.menu.categories.flatMap((c) => c.items).find((i) => i.name_en === 'Halloumi Wrap');
+  assert.equal(wrap.available, false, 'sold-out items are shown as sold out');
 });
 
 test('items cannot be attached to another restaurant\'s category', async () => {
@@ -93,6 +97,7 @@ test('uploads: real PDF/images only; type is checked by content, not by the head
   assert.equal((await up(owner, PNG, 'image/jpeg')).statusCode, 415, 'PNG declared as JPEG is refused');
   assert.equal((await up(owner, Buffer.from('<svg onload=alert(1)>'), 'image/svg+xml')).statusCode, 415);
   assert.equal((await up(staff, JPG, 'image/jpeg')).statusCode, 403);
+  assert.equal((await up(owner, FAKE_JPG, 'image/jpeg')).statusCode, 415, 'JPEG magic bytes but not a real image');
   const big = Buffer.concat([JPG, Buffer.alloc(5 * 1024 * 1024)]);
   assert.equal((await up(owner, big, 'image/jpeg')).statusCode, 413);
   const noOrigin = await app.inject({ method: 'PUT', url: '/api/admin/menu/files', cookies: owner, headers: { 'content-type': 'image/jpeg' }, payload: JPG });
@@ -111,6 +116,7 @@ test('a new PDF replaces the old one; images are capped at 20', async () => {
 });
 
 test('menu files are served safely and only for active restaurants', async () => {
+  assert.equal((await as(owner)('PUT', '/api/admin/menu/settings', { menu_mode: 'file' })).statusCode, 200);
   const v = (await app.inject({ url: `/api/t/${S.demoToken}` })).json();
   assert.ok(v.restaurant.menu.pdf);
   assert.equal(v.restaurant.menu.images.length, 20);

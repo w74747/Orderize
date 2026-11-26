@@ -22,6 +22,7 @@ const settingsBody = z.strictObject({
   require_phone: z.boolean().optional(),
   loyalty_enabled: z.boolean().optional(),
   points_per_unit: z.number().int().min(0).max(1000).optional(),
+  vat_bps: z.number().int().min(0).max(3000).optional(),
 });
 
 /** Restaurant-side CRM. Registered inside the admin plugin (session + CSRF hooks apply). */
@@ -92,7 +93,7 @@ export default async function crmRoutes(app, { ctx, auth, rid }) {
 
   app.get('/api/admin/settings', { preHandler: auth('manager') }, async (req) => {
     const { rows: [r] } = await pool.query(
-      'SELECT google_review_url, require_phone, loyalty_enabled, points_per_unit, currency FROM restaurants WHERE id = $1', [rid(req)],
+      'SELECT google_review_url, require_phone, loyalty_enabled, points_per_unit, currency, vat_bps FROM restaurants WHERE id = $1', [rid(req)],
     );
     return r;
   });
@@ -102,9 +103,9 @@ export default async function crmRoutes(app, { ctx, auth, rid }) {
     await pool.query(
       `UPDATE restaurants SET google_review_url = CASE WHEN $2 THEN $3 ELSE google_review_url END,
               require_phone = coalesce($4, require_phone), loyalty_enabled = coalesce($5, loyalty_enabled),
-              points_per_unit = coalesce($6, points_per_unit)
+              points_per_unit = coalesce($6, points_per_unit), vat_bps = coalesce($7, vat_bps)
         WHERE id = $1`,
-      [rid(req), 'google_review_url' in b, b.google_review_url ?? null, b.require_phone ?? null, b.loyalty_enabled ?? null, b.points_per_unit ?? null],
+      [rid(req), 'google_review_url' in b, b.google_review_url ?? null, b.require_phone ?? null, b.loyalty_enabled ?? null, b.points_per_unit ?? null, b.vat_bps ?? null],
     );
     await audit(pool, { actorType: 'user', actorId: req.user.id, restaurantId: rid(req), action: 'settings.updated', ip: req.ip, meta: Object.keys(b) });
     return { ok: true };

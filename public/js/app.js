@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { STR, detectLang, saveLang } from './i18n.js';
 import { formatMoney, parseMajor, quote, remainingOf, BillingError } from '../shared/billing.js';
+import { createMenu } from './menu.js';
 
 const root = document.getElementById('app');
 const S = {
@@ -68,7 +69,7 @@ const I = {
   receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6', menu: 'M4 3v8a3 3 0 003 3v7M10 3v8M7 3v8M17 3c-2 2-2 6 0 8v10',
   users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
   tag: 'M20.6 13.4L13.4 20.6a2 2 0 01-2.8 0L2 12V2h10l8.6 8.6a2 2 0 010 2.8zM7 7h.01', lock: 'M5 11h14v10H5zM8 11V7a4 4 0 018 0v4',
-  check: 'M20 6L9 17l-5-5', user: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z', star: 'M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z', x: 'M18 6L6 18M6 6l12 12', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
+  check: 'M20 6L9 17l-5-5', user: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z', star: 'M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z', x: 'M18 6L6 18M6 6l12 12', bell: 'M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0', search: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.3-4.3', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
 };
 
 // ---------- money logic (display only — the server recomputes everything)
@@ -117,11 +118,13 @@ async function refreshPromo() {
   render();
 }
 
+const toastEl = h('div', { class: 'toast', role: 'status' });
 function toast(msg) {
   S.toast = msg;
-  render();
+  toastEl.textContent = msg;
+  if (!toastEl.isConnected) root.append(toastEl);
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => { S.toast = null; render(); }, 3200);
+  toast.t = setTimeout(() => { S.toast = null; toastEl.remove(); }, 3200);
 }
 
 // ---------- shared chrome
@@ -162,10 +165,10 @@ function viewHome() {
   const initials = (r.name_en.match(/\b\w/g) || []).slice(0, 2).join('');
   return h('div', { class: 'home' },
     h('div', { class: 'cover', style: { background: `linear-gradient(160deg, ${r.brand_color}, #111)` } },
-      safeImg(r.cover_url, 'cover-img'),
+      mediaImg(r.menu?.cover, 'cover-img') || safeImg(r.cover_url, 'cover-img'),
       topBar(),
       h('div', { class: 'hero' },
-        h('div', { class: 'logo', style: { background: r.brand_color } }, safeImg(r.logo_url) || initials),
+        h('div', { class: 'logo', style: { background: r.brand_color } }, mediaImg(r.menu?.logo) || safeImg(r.logo_url) || initials),
         h('p', { class: 'eyebrow' }, t('welcome')),
         h('h1', null, nm(r)),
       ),
@@ -176,6 +179,8 @@ function viewHome() {
         ? h('button', { class: 'btn primary big', onclick: () => go('pay') }, icon(I.receipt), `${t('payNow')} · ${money(b.remaining_minor)}`)
         : statusBox(),
       hasMenu(r.menu) ? h('button', { class: 'btn soft big', onclick: () => go('menu') }, icon(I.menu), t('viewMenu')) : null,
+      M.hasOrders() ? h('button', { class: 'btn soft big', onclick: () => M.openSheet('orders') }, icon(I.receipt), t('yourOrders')) : null,
+      r.menu?.waiter_call ? h('button', { class: 'btn ghost', onclick: () => M.openSheet('help') }, icon(I.bell, 18), t('callWaiter')) : null,
       h('p', { class: 'powered' }, 'Orderize', h('small', null, t('terms'))),
     ),
   );
@@ -185,6 +190,11 @@ function statusBox() {
   const b = S.data.bill;
   if (b) return h('div', { class: 'status ok' }, h('strong', null, t('paid')), h('p', null, t('paidSub')));
   return h('div', { class: 'status' }, h('strong', null, t('noBill')), h('p', null, t('noBillSub')));
+}
+
+function mediaImg(url, cls) {
+  if (typeof url !== 'string' || !/^\/media\/[0-9a-f-]{36}$/i.test(url)) return null;
+  return h('img', { src: url, alt: '', class: cls });
 }
 
 function safeImg(url, cls) {
@@ -213,7 +223,8 @@ function viewUploadedMenu(m) {
 
 function viewMenu() {
   const m = S.data.restaurant.menu;
-  if (m.pdf || m.images?.length) return viewUploadedMenu(m);
+  if (m.mode === 'file' || (!m.categories?.length && (m.pdf || m.images?.length))) return viewUploadedMenu(m);
+  if (m.categories?.length) return M.view();
   const desc = (it) => (S.lang === 'ar' ? it.description_ar || it.description_en : it.description_en || it.description_ar);
   return h('div', { class: 'page' },
     topBar({ back: () => go(S.data.require_phone && !S.data.me ? 'login' : 'home') }),
@@ -553,7 +564,8 @@ function viewOtp() {
     S.busy = true;
     try {
       const r = await api.otpVerify(a.challenge, a.code);
-      S.view = r.needs_profile ? 'profile' : 'home';
+      S.view = r.needs_profile ? 'profile' : (S.afterLogin ?? 'home');
+      if (!r.needs_profile) S.afterLogin = null;
       await load();
     } catch (e) { toast(errText(e.code)); a.code = ''; }
     S.busy = false;
@@ -575,7 +587,8 @@ function viewProfile() {
   const save = async () => {
     try {
       await api.saveProfile({ name: p.name.trim(), gender: p.gender, birth_date: p.birth_date, marketing_consent: p.marketing_consent });
-      S.view = 'home';
+      S.view = S.afterLogin ?? 'home';
+      S.afterLogin = null;
       await load();
     } catch (e) { toast(errText(e.code)); }
   };
@@ -671,13 +684,21 @@ function render() {
   if (api.demo) kids.unshift(h('button', { class: 'demo-flag', onclick: () => { api.reset(); boot(); } },
     S.lang === 'ar' ? 'نسخة تجريبية — لا يتم خصم أموال حقيقية · اضغط لإعادة الضبط' : 'Demo — no real money is charged · tap to reset'));
   if (S.sheet) {
-    const content = { split: sheetSplit, tip: sheetTip, promo: sheetPromo }[S.sheet]();
-    kids.push(h('div', { class: 'scrim', onclick: (e) => { if (e.target === e.currentTarget) closeSheet(); } },
-      h('div', { class: 'bottom-sheet', role: 'dialog', 'aria-modal': 'true' },
-        h('button', { class: 'icon-btn close', 'aria-label': 'close', onclick: closeSheet }, icon(I.x)), content)));
-  }
-  if (S.toast) kids.push(h('div', { class: 'toast', role: 'status' }, S.toast));
-  root.replaceChildren(...kids);
+    const menuSheet = M.cachedSheets.has(S.sheet);
+    const key = `${S.sheet}:${S.sheetV ?? 0}:${S.lang}`;
+    if (!menuSheet || render.sheet?.key !== key) {
+      const content = menuSheet ? M.sheets[S.sheet]() : { split: sheetSplit, tip: sheetTip, promo: sheetPromo }[S.sheet]();
+      const close = menuSheet ? M.closeSheet : closeSheet;
+      render.sheet = { key, el: h('div', { class: 'scrim', onclick: (e) => { if (e.target === e.currentTarget) close(); } },
+        h('div', { class: `bottom-sheet${menuSheet ? ' tall' : ''}`, role: 'dialog', 'aria-modal': 'true' },
+          h('button', { class: 'icon-btn close', 'aria-label': 'close', onclick: close }, icon(I.x)), content)) };
+    }
+    kids.push(render.sheet.el);
+  } else render.sheet = null;
+  if (S.toast) kids.push(toastEl);
+  // Keep nodes that did not change in place (preserves scroll positions and running carousels).
+  kids.forEach((k, i) => { if (root.childNodes[i] !== k) root.insertBefore(k, root.childNodes[i] ?? null); });
+  while (root.childNodes.length > kids.length) root.lastChild.remove();
 }
 
 async function load() {
@@ -685,8 +706,9 @@ async function load() {
   // Drop selections that no longer make sense after a refresh.
   if (S.split.mode === 'items') S.split = { mode: 'full' };
   if (S.data.me?.needs_profile) S.view = 'profile';
-  else if (S.data.require_phone && !S.data.me && !['otp', 'login'].includes(S.view)) S.view = 'login';
-  else if (S.data.me && ['login', 'otp', 'profile'].includes(S.view)) S.view = 'home';
+  else if (S.data.require_phone && !S.data.me && !['otp', 'login', 'menu'].includes(S.view)) S.view = 'login';
+  else if (S.data.me && ['login', 'otp', 'profile'].includes(S.view)) S.view = S.afterLogin ?? 'home';
+  M.onLoad();
   render();
 }
 
@@ -715,6 +737,8 @@ export async function boot() {
     root.replaceChildren(h('div', { class: 'center' }, h('p', null, e.status === 404 ? 'QR code not recognised.' : errText(e.code))));
   }
 }
+
+const M = createMenu({ S, h, t, money, icon, I, api, toast, render, go, errText, saveLang, reload: () => load() });
 
 window.addEventListener('orderize:return', (e) => viewReturn(e.detail));
 boot();

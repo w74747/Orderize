@@ -92,3 +92,41 @@ Notes:
 - Only sign-in codes are sent (no coupons or marketing), with a limit of 10 per minute and 200 per day.
 - The session keys are stored encrypted (AES-256-GCM) in `wa_web_auth`. **Unlink & forget** removes the device and deletes them.
 - When `WHATSAPP_TOKEN` (Cloud API) is set, it takes priority automatically.
+
+## Interactive menu, banners and table ordering
+
+**Dashboard → Menu → What diners see** sets the display mode:
+
+- **Uploaded menu:** diners see only the PDF or photos you uploaded.
+- **Interactive menu:** cover picture, logo, banners, categories, search, photos, calories and allergens.
+- **Interactive menu + ordering:** the interactive menu, and diners can also order from it.
+
+**Items**
+- Each item has a name and description in Arabic and English, a price (in the restaurant's currency, VAT included) and a photo.
+- Nutrition fields: calories, caffeine and a high-salt label. Calories are required for Saudi restaurants under the SFDA menu-labelling rules.
+- Items can also have tags, allergens and option groups (size, extras…) with min/max choices and extra prices.
+- **Auto-translation:** leave one language empty and it is filled in when you save. Set `DEEPL_API_KEY` (a free key ends with `:fx`) or `GOOGLE_TRANSLATE_API_KEY`. Each restaurant is capped at 60k characters per day, and machine-filled fields are marked so you can review them.
+
+**Images**
+- Every upload is decoded and re-encoded as WebP with sharp. This strips metadata, resizes the picture, and rejects fake or oversized images.
+
+**Banners**
+- Banners can be scheduled (start/end) and hidden.
+- A banner can open an item or a category, or be view-only.
+- Views and taps are counted.
+- On the menu they rotate every 4.5 s and can be swiped. Rotation pauses while the diner touches the banner, and turns off if the diner has reduced motion enabled.
+
+**Orders**
+- The server prices every order from the database. Prices or options sent by the browser are never trusted.
+- Repeated submits are idempotent.
+- At most 3 unconfirmed orders are allowed per table, and the owner can require WhatsApp sign-in before ordering.
+- Order statuses: New → Preparing (accepted) → Ready → Served, or Rejected with a reason.
+- Accepting an order adds it to the table's bill (VAT % from Settings).
+- If the restaurant runs a live Foodics/Simphony connection, the order is instead flagged "Enter this order in the POS".
+
+**Order stations**
+- Add a station under Dashboard → Orders → Order stations, then scan the QR code with the device (phone, tablet or Sunmi POS).
+- The pairing code is single-use, expires in 10 minutes, and travels in the URL fragment, so it never appears in server logs.
+- The device receives a revocable token (only its hash is stored), and can see and update orders and waiter calls only.
+- The station screen plays an alert while orders or calls are waiting and keeps the screen awake.
+- It prints 80 mm kitchen tickets through the browser's print dialog, with optional auto-print on accept.

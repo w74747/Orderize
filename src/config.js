@@ -40,6 +40,9 @@ const schema = z
     OTP_DEV_ECHO: bool.default(false),
     // TEST ONLY: link a regular WhatsApp number by QR (unofficial client). Refused in real production.
     WHATSAPP_WEB_ENABLED: bool.default(false),
+    // Menu auto-translation (Arabic <-> English). Either one; DeepL is preferred when both are set.
+    DEEPL_API_KEY: z.string().min(10).optional(),
+    GOOGLE_TRANSLATE_API_KEY: z.string().min(10).optional(),
     // First platform administrator, created at boot if none exists.
     PLATFORM_ADMIN_EMAIL: z.email().optional(),
     PLATFORM_ADMIN_PASSWORD: z.string().min(12).optional(),

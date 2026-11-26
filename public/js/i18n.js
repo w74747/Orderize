@@ -97,6 +97,42 @@ export function detectLang() {
   return (navigator.language || '').startsWith('ar') ? 'ar' : 'en';
 }
 
+// ---- interactive menu & table ordering
+Object.assign(STR.en, {
+  menuSearch: 'Search the menu', soldOut: 'Sold out', kcal: 'kcal', caffeine: 'Caffeine', mg: 'mg', highSalt: 'High in salt',
+  contains: 'Contains', required: 'Required', optional: 'Optional', chooseN: 'Choose {n}', upToN: 'Up to {n}', chooseRange: 'Choose {a}–{b}',
+  addToOrder: 'Add to order', specialReq: 'Special requests', notePh: 'e.g. no onions', viewOrder: 'View order', itemsN: '{n} items', itemN: '1 item',
+  yourOrder: 'Your order', orderNote: 'Note for the kitchen (optional)', sendOrder: 'Send order', orderSent: 'Order sent! The team will confirm it shortly.',
+  added: 'Added to your order', yourOrders: 'Your orders', orderNo: 'Order', noResults: 'No dishes match your search', needHelp: 'Need anything?',
+  st_new: 'Waiting for confirmation', st_preparing: 'Being prepared', st_ready: 'Ready', st_served: 'Served', st_cancelled: 'Cancelled',
+  callWaiter: 'Call a waiter', askBill: 'Ask for the bill', waiterNotified: 'The team has been notified', addedToBill: 'Accepted orders are added to your bill.',
+  tag_vegetarian: 'Vegetarian', tag_vegan: 'Vegan', tag_spicy: 'Spicy', tag_new: 'New', tag_popular: 'Popular', tag_gluten_free: 'Gluten free', tag_chef: "Chef's pick", tag_healthy: 'Healthy',
+  al_gluten: 'gluten', al_dairy: 'dairy', al_egg: 'eggs', al_nuts: 'tree nuts', al_peanuts: 'peanuts', al_sesame: 'sesame', al_soy: 'soy', al_fish: 'fish', al_shellfish: 'shellfish', al_mustard: 'mustard', al_celery: 'celery',
+  remove: 'Remove', total: 'Total', tableN: 'Table {n}',
+});
+Object.assign(STR.en.errors, {
+  ORDERING_DISABLED: 'Ordering from the table is not available right now', OPTIONS_INVALID: 'Please complete your choices',
+  ITEM_SOLD_OUT: 'Sorry, an item in your order just sold out', TOO_MANY_PENDING_ORDERS: 'Please wait until your previous orders are confirmed',
+  ITEM_NOT_FOUND: 'An item is no longer on the menu', TOO_MANY_LINES: 'Your order is too large', WAITER_CALL_DISABLED: 'Please ask a team member',
+});
+Object.assign(STR.ar, {
+  menuSearch: 'ابحث في القائمة', soldOut: 'نفد', kcal: 'سعرة', caffeine: 'كافيين', mg: 'ملغ', highSalt: 'عالي الملح',
+  contains: 'يحتوي على', required: 'إلزامي', optional: 'اختياري', chooseN: 'اختر {n}', upToN: 'حتى {n}', chooseRange: 'اختر من {a} إلى {b}',
+  addToOrder: 'أضف للطلب', specialReq: 'ملاحظات خاصة', notePh: 'مثال: بدون بصل', viewOrder: 'عرض الطلب', itemsN: '{n} أصناف', itemN: 'صنف واحد',
+  yourOrder: 'طلبك', orderNote: 'ملاحظة للمطبخ (اختياري)', sendOrder: 'أرسل الطلب', orderSent: 'تم إرسال طلبك! سيؤكده الفريق قريباً.',
+  added: 'أُضيف إلى طلبك', yourOrders: 'طلباتك', orderNo: 'طلب', noResults: 'لا توجد أصناف مطابقة', needHelp: 'تحتاج شيئاً؟',
+  st_new: 'بانتظار التأكيد', st_preparing: 'قيد التحضير', st_ready: 'جاهز', st_served: 'تم التسليم', st_cancelled: 'ملغي',
+  callWaiter: 'استدعاء النادل', askBill: 'طلب الفاتورة', waiterNotified: 'تم إبلاغ الفريق', addedToBill: 'الطلبات المؤكدة تُضاف إلى فاتورتك.',
+  tag_vegetarian: 'نباتي', tag_vegan: 'نباتي صرف', tag_spicy: 'حار', tag_new: 'جديد', tag_popular: 'الأكثر طلباً', tag_gluten_free: 'خالٍ من الغلوتين', tag_chef: 'اختيار الشيف', tag_healthy: 'صحي',
+  al_gluten: 'الغلوتين', al_dairy: 'الألبان', al_egg: 'البيض', al_nuts: 'المكسرات', al_peanuts: 'الفول السوداني', al_sesame: 'السمسم', al_soy: 'الصويا', al_fish: 'السمك', al_shellfish: 'القشريات', al_mustard: 'الخردل', al_celery: 'الكرفس',
+  remove: 'حذف', total: 'الإجمالي', tableN: 'طاولة {n}',
+});
+Object.assign(STR.ar.errors, {
+  ORDERING_DISABLED: 'الطلب من الطاولة غير متاح حالياً', OPTIONS_INVALID: 'يرجى إكمال الاختيارات',
+  ITEM_SOLD_OUT: 'عذراً، نفد أحد الأصناف في طلبك', TOO_MANY_PENDING_ORDERS: 'يرجى الانتظار حتى تأكيد طلباتك السابقة',
+  ITEM_NOT_FOUND: 'أحد الأصناف لم يعد في القائمة', TOO_MANY_LINES: 'الطلب كبير جداً', WAITER_CALL_DISABLED: 'يرجى التواصل مع أحد أفراد الفريق',
+});
+
 export function saveLang(l) {
   try { localStorage.setItem('orderize_lang', l); } catch {}
 }

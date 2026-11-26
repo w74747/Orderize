@@ -29,6 +29,11 @@ export const api = {
   me: () => req('GET', '/api/me'),
   logout: () => req('POST', '/api/me/logout', {}),
   deleteMe: () => req('DELETE', '/api/me'),
+  orders: (token) => req('GET', `/api/t/${encodeURIComponent(token)}/orders`),
+  placeOrder: (token, body) => req('POST', `/api/t/${encodeURIComponent(token)}/orders`, body),
+  callWaiter: (token, kind) => req('POST', `/api/t/${encodeURIComponent(token)}/call`, { kind }),
+  bannerClick: (token, id) => req('POST', `/api/t/${encodeURIComponent(token)}/banners/${encodeURIComponent(id)}/click`, {}),
+  bannersSeen: (token, ids) => req('POST', `/api/t/${encodeURIComponent(token)}/banners/seen`, { ids }),
   rate: (id, stars, comment) => req('POST', `/api/payments/${encodeURIComponent(id)}/rating`, { stars, ...(comment ? { comment } : {}) }),
   /** Only follow redirects to https or our own origin (defence against open redirects). */
   go(url) {

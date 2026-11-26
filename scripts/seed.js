@@ -3,6 +3,9 @@
 import { createPool, tx } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { hashPassword, randomToken } from '../src/lib/crypto.js';
+import { processImage } from '../src/lib/images.js';
+import sharp from 'sharp';
+import crypto from 'node:crypto';
 
 export async function seed(pool, { ownerPassword, quiet = false } = {}) {
   const generated = !ownerPassword;
@@ -109,6 +112,45 @@ export async function seed(pool, { ownerPassword, quiet = false } = {}) {
         }
       }
     }
+
+    // Rich demo details (descriptions, calories, tags, options) — only fills empty fields.
+    const extras = {
+      'Avo Toast With Poached Egg': { d_en: 'Sourdough, smashed avocado, poached egg, chilli flakes and lime.', d_ar: 'خبز العجين المخمر مع أفوكادو مهروس وبيض مسلوق ورقائق الفلفل والليمون.', kcal: 520, tags: ['popular'], allergens: ['gluten', 'egg'] },
+      Shakshuka: { d_en: 'Eggs baked in a spiced tomato and pepper sauce, served with bread.', d_ar: 'بيض مطهو في صلصة الطماطم والفلفل المتبلة، يقدم مع الخبز.', kcal: 430, tags: ['vegetarian', 'spicy'], allergens: ['egg', 'gluten'] },
+      'Spanish Latte Hot': { d_en: 'Double espresso with condensed milk and steamed milk.', d_ar: 'إسبريسو مزدوج مع الحليب المكثف والحليب المبخر.', kcal: 210, caffeine: 130, tags: ['popular'], allergens: ['dairy'],
+        options: [{ name_en: 'Milk', name_ar: 'نوع الحليب', min: 1, max: 1, choices: [{ name_en: 'Full fat', name_ar: 'كامل الدسم', price_minor: 0 }, { name_en: 'Oat', name_ar: 'شوفان', price_minor: 300 }, { name_en: 'Almond', name_ar: 'لوز', price_minor: 300 }] },
+          { name_en: 'Extras', name_ar: 'إضافات', min: 0, max: 2, choices: [{ name_en: 'Extra shot', name_ar: 'شوت إضافي', price_minor: 500 }, { name_en: 'Vanilla syrup', name_ar: 'شراب الفانيلا', price_minor: 300 }] }] },
+      'Berry Cloudy': { d_en: 'Mixed berries, yoghurt and honey, blended cold.', d_ar: 'توت مشكل مع الزبادي والعسل، مخفوق بارد.', kcal: 280, tags: ['new', 'healthy'], allergens: ['dairy'] },
+    };
+    for (const [name, x] of Object.entries(extras)) {
+      const opts = (x.options ?? []).map((g) => ({ ...g, id: crypto.randomUUID(), choices: g.choices.map((ch) => ({ ...ch, id: crypto.randomUUID() })) }));
+      await c.query(
+        `UPDATE menu_items SET description_en = $3, description_ar = $4, calories = $5, caffeine_mg = $6, tags = $7, allergens = $8,
+                options = CASE WHEN options = '[]'::jsonb THEN $9::jsonb ELSE options END
+          WHERE restaurant_id = $1 AND name_en = $2 AND description_en IS NULL`,
+        [r.id, name, x.d_en, x.d_ar, x.kcal, x.caffeine ?? null, x.tags, x.allergens, JSON.stringify(opts)],
+      );
+    }
+    if (!(await c.query('SELECT 1 FROM menu_banners WHERE restaurant_id = $1', [r.id])).rowCount) {
+      const grad = (a, b2) => Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b2}"/></linearGradient></defs><rect width="1200" height="600" fill="url(#g)"/><circle cx="1010" cy="300" r="230" fill="#ffffff" fill-opacity=".12"/><circle cx="1090" cy="120" r="90" fill="#ffffff" fill-opacity=".10"/></svg>`);
+      const banners = [
+        ['#0b4f7c', '#1f8a9e', 'Breakfast 20% off until 11am', 'خصم ٢٠٪ على الفطور حتى ١١ صباحاً', 'category', (await c.query(`SELECT id FROM menu_categories WHERE restaurant_id = $1 AND name_en = 'Breakfast'`, [r.id])).rows[0]?.id],
+        ['#7a3e9d', '#d0607a', 'New: Berry Cloudy', 'جديد: بيري كلاودي', 'item', (await c.query(`SELECT id FROM menu_items WHERE restaurant_id = $1 AND name_en = 'Berry Cloudy'`, [r.id])).rows[0]?.id],
+      ];
+      let bp = 0;
+      for (const [a1, a2, en, ar, lt, lid] of banners) {
+        const img = await processImage(await sharp(grad(a1, a2)).png().toBuffer(), 'banner');
+        const { rows: [m] } = await c.query(
+          `INSERT INTO media(restaurant_id, kind, mime, bytes, size, sha256, width, height) VALUES ($1,'banner',$2,$3,$4,$5,$6,$7) RETURNING id`,
+          [r.id, img.mime, img.bytes, img.bytes.length, crypto.createHash('sha256').update(img.bytes).digest('hex'), img.width, img.height],
+        );
+        await c.query(
+          `INSERT INTO menu_banners(restaurant_id, image_id, title_en, title_ar, link_type, link_id, position) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [r.id, m.id, en, ar, lid ? lt : 'none', lid ?? null, bp++],
+        );
+      }
+    }
+    if (!hasMenu) await c.query(`UPDATE restaurants SET menu_mode = 'order', vat_bps = 500 WHERE id = $1`, [r.id]);
 
     // Sample plans + subscriptions (managed from the platform console).
     const plan = async (name, price, cur) => (await c.query(

@@ -15,7 +15,9 @@ import { processWritebacks } from './pos/service.js';
 import { PosError } from './pos/http.js';
 import { oauthCallbackRoutes } from './routes/integrations.js';
 import meRoutes from './routes/me.js';
-import { mediaRoutes } from './routes/menu.js';
+import { mediaRoutes, cleanupOrphanMedia } from './routes/menu.js';
+import { tableOrderRoutes, stationRoutes } from './routes/orders.js';
+import { createTranslator } from './lib/translate.js';
 import { createWhatsApp } from './lib/whatsapp.js';
 import { createWaWeb } from './lib/waweb.js';
 import { runBirthdayCampaigns } from './services/campaigns.js';
@@ -46,6 +48,7 @@ export async function buildApp({ config, pool, logger = true }) {
   };
   ctx.waweb = config.WHATSAPP_WEB_ENABLED ? createWaWeb({ pool, cipher: ctx.cipher, log: app.log }) : null;
   ctx.whatsapp = createWhatsApp(config, pool, app.log, ctx.waweb);
+  ctx.translator = createTranslator(config, app.log);
   app.decorate('ctx', ctx);
 
   await app.register(helmet, {
@@ -92,6 +95,7 @@ export async function buildApp({ config, pool, logger = true }) {
   app.get('/t/:token', spa('index.html'));
   app.get('/pay/return', spa('index.html'));
   app.get('/admin', spa('admin.html'));
+  app.get('/station', spa('station.html'));
   app.get('/platform', spa('platform.html'));
   app.get('/me', spa('index.html'));
   app.get('/healthz', async () => ({ ok: true }));
@@ -103,6 +107,8 @@ export async function buildApp({ config, pool, logger = true }) {
   await app.register(oauthCallbackRoutes, { ctx });
   await app.register(meRoutes, { ctx });
   await app.register(mediaRoutes, { ctx });
+  await app.register(tableOrderRoutes, { ctx });
+  await app.register(stationRoutes, { ctx });
   if (config.PAYMENT_PROVIDER === 'sandbox') await app.register(sandboxRoutes, { ctx });
 
   const timer = setInterval(() => expireStalePayments(pool).catch((e) => app.log.error(e)), 60_000);
@@ -112,7 +118,9 @@ export async function buildApp({ config, pool, logger = true }) {
   // Birthday coupons: idempotent per customer per year, so running often is safe.
   const bday = setInterval(() => runBirthdayCampaigns(ctx).catch((e) => app.log.error(e)), 6 * 3600_000);
   bday.unref();
-  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); clearInterval(bday); await ctx.waweb?.stop(); });
+  const media = setInterval(() => cleanupOrphanMedia(pool).catch((e) => app.log.error(e)), 6 * 3600_000);
+  media.unref();
+  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); clearInterval(bday); clearInterval(media); await ctx.waweb?.stop(); });
 
   return app;
 }

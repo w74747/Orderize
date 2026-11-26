@@ -103,6 +103,11 @@ function serverQuote(body) {
 export const api = {
   demo: true,
   demoToken: TOKEN,
+  async orders() { return { orders: [] }; },
+  async placeOrder() { throw Object.assign(new Error('ORDERING_DISABLED'), { code: 'ORDERING_DISABLED' }); },
+  async callWaiter() { await wait(200); return { ok: true }; },
+  async bannerClick() { return { ok: true }; },
+  async bannersSeen() { return { ok: true }; },
   async getTable() {
     await wait(150);
     const b = billState();

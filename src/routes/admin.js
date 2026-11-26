@@ -10,6 +10,7 @@ import integrationRoutes from './integrations.js';
 import crmRoutes from './crm.js';
 import platformRoutes from './platform.js';
 import menuRoutes from './menu.js';
+import { deviceAdminRoutes } from './orders.js';
 
 export default async function adminRoutes(app, { ctx }) {
   const { pool, config, cipher } = ctx;
@@ -23,7 +24,7 @@ export default async function adminRoutes(app, { ctx }) {
     if (req.method === 'GET' || req.method === 'HEAD') return;
     if (req.headers.origin !== origin) throw new HttpError(403, 'BAD_ORIGIN');
     const type = String(req.headers['content-type'] ?? '').split(';')[0].trim();
-    const upload = req.method === 'PUT' && req.url.split('?')[0] === '/api/admin/menu/files'
+    const upload = req.method === 'PUT' && /^\/api\/admin\/(menu\/files|media\/(logo|cover|item|banner))$/.test(req.url.split('?')[0])
       && ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(type);
     const emptyDelete = req.method === 'DELETE' && !Number(req.headers['content-length'] ?? 0);
     if (type !== 'application/json' && !upload && !emptyDelete) throw new HttpError(415, 'JSON_ONLY');
@@ -226,6 +227,7 @@ export default async function adminRoutes(app, { ctx }) {
   await integrationRoutes(app, { ctx, auth, rid });
   await crmRoutes(app, { ctx, auth, rid });
   await menuRoutes(app, { ctx, auth, rid });
+  await deviceAdminRoutes(app, { ctx, auth, rid });
   await platformRoutes(app, { ctx, auth });
 
   app.get('/api/admin/audit', { preHandler: auth('owner') }, async (req) => {

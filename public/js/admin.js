@@ -1,5 +1,6 @@
 // Restaurant dashboard. Same no-innerHTML rule as the diner app.
 import { formatMoney, parseMajor, CURRENCIES } from '../shared/billing.js';
+import { createMenuAdmin, createOrdersAdmin } from './admin-menu.js';
 const decimalsOf = (c) => CURRENCIES[c].decimals;
 
 const root = document.getElementById('admin');
@@ -7,6 +8,8 @@ let me = null;
 let summary = null;
 let tab = 'tables';
 let flash = '';
+const menuAdmin = createMenuAdmin({ h, api: (m, u, b) => api(m, u, b), fm: (m) => fm(m), cur: () => cur(), msg: (...a) => msg(...a), render: () => render(), parseMajor, decimalsOf });
+const ordersAdmin = createOrdersAdmin({ h, api: (m, u, b) => api(m, u, b), msg: (...a) => msg(...a), render: () => render(), me: () => me, summary: () => summary });
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -83,7 +86,7 @@ async function view2fa(forced) {
 
 // ---------- shell
 function shell(content) {
-  const tabs = [['tables', 'Tables & bills'], ['menu', 'Menu'], ['payments', 'Payments'], ['customers', 'Customers'], ['campaigns', 'Coupons & campaigns'], ['ratings', 'Ratings'], ['pos', 'POS integration'], ['offers', 'Promo codes'], ['settings', 'Settings & security']];
+  const tabs = [['tables', 'Tables & bills'], ['orders', 'Orders'], ['menu', 'Menu'], ['payments', 'Payments'], ['customers', 'Customers'], ['campaigns', 'Coupons & campaigns'], ['ratings', 'Ratings'], ['pos', 'POS integration'], ['offers', 'Promo codes'], ['settings', 'Settings & security']];
   return h('div', { class: 'shell' },
     h('header', { class: 'bar' },
       h('strong', null, summary.restaurant.name_en),
@@ -99,7 +102,8 @@ const kpi = (l, v) => h('div', { class: 'kpi' }, h('small', null, l), h('strong'
 
 async function render() {
   summary = await api('GET', '/api/admin/summary');
-  const views = { tables: viewTables, menu: viewMenuAdmin, payments: viewPayments, customers: viewCustomers, campaigns: viewCampaigns, ratings: viewRatings, pos: viewPos, offers: viewOffers, settings: viewSettings };
+  ordersAdmin.stop();
+  const views = { tables: viewTables, orders: () => ordersAdmin.view(), menu: viewMenuAdmin, payments: viewPayments, customers: viewCustomers, campaigns: viewCampaigns, ratings: viewRatings, pos: viewPos, offers: viewOffers, settings: viewSettings };
   root.replaceChildren(shell(await views[tab]()));
 }
 
@@ -509,15 +513,17 @@ async function restaurantSettingsCard() {
   const req = h('input', { type: 'checkbox', checked: st.require_phone });
   const loy = h('input', { type: 'checkbox', checked: st.loyalty_enabled });
   const ppu = h('input', { inputmode: 'numeric', value: st.points_per_unit });
+  const vat = h('input', { inputmode: 'decimal', value: (st.vat_bps ?? 0) / 100 });
   const out = h('p', { class: 'note' });
   return h('div', { class: 'card form' }, h('h3', null, 'Restaurant settings'),
     h('label', null, 'Google review link', g),
     h('label', { class: 'check' }, req, 'Diners must sign in with WhatsApp before paying'),
     h('label', { class: 'check' }, loy, 'Loyalty points enabled'),
     h('label', null, `Points per 1 ${st.currency}`, ppu),
+    h('label', null, 'VAT % included in menu prices (used when table orders are added to bills)', vat),
     h('button', { class: 'btn primary sm', onclick: async () => {
       try {
-        await api('PUT', '/api/admin/settings', { google_review_url: g.value.trim() || null, require_phone: req.checked, loyalty_enabled: loy.checked, points_per_unit: Number(ppu.value) });
+        await api('PUT', '/api/admin/settings', { google_review_url: g.value.trim() || null, require_phone: req.checked, loyalty_enabled: loy.checked, points_per_unit: Number(ppu.value), vat_bps: Math.round(Number(vat.value) * 100) });
         msg(out, 'Saved', true);
       } catch (e) { msg(out, e.code || 'Check the values'); }
     } }, 'Save'), out);
@@ -545,10 +551,10 @@ function parseMenuText(text) {
 }
 
 async function viewMenuAdmin() {
-  const { categories, files } = await api('GET', '/api/admin/menu');
+  const data = await api('GET', '/api/admin/menu');
+  const { categories, files } = data;
   const canEdit = me.role !== 'staff';
   const out = h('p', { class: 'note' });
-
   const fileInput = h('input', { type: 'file', accept: 'application/pdf,image/jpeg,image/png,image/webp', multiple: true });
   const filesCard = h('div', { class: 'card' }, h('h3', null, 'Menu files (PDF or photos)'),
     h('p', { class: 'muted' }, 'When you upload a menu here, diners see only this file under "View menu" — your own design. The item list below is then used only by your staff to build each table\'s bill. One PDF (max 10 MB) and up to 20 photos (max 5 MB each).'),
@@ -580,58 +586,15 @@ async function viewMenuAdmin() {
       catch (e) { msg(importOut, e.code || 'Import failed'); }
     } }, 'Import'), importOut);
 
-  const catName = { en: h('input', { placeholder: 'New category (EN)' }), ar: h('input', { placeholder: 'القسم (عربي)', dir: 'rtl' }) };
-  const addCat = h('div', { class: 'card form' }, h('h3', null, 'Add category'), catName.en, catName.ar,
-    h('button', { class: 'btn primary sm', onclick: async () => {
-      try { await api('POST', '/api/admin/menu/categories', { name_en: catName.en.value, name_ar: catName.ar.value || catName.en.value }); render(); } catch (e) { msg(out, e.code); }
-    } }, 'Add'));
-
-  const catCards = categories.map((c) => {
-    const f = { en: h('input', { placeholder: 'Item (EN)' }), ar: h('input', { placeholder: 'الصنف (عربي)', dir: 'rtl' }), price: h('input', { placeholder: 'Price', inputmode: 'decimal' }), desc: h('input', { placeholder: 'Description (optional)' }) };
-    const res = h('p', { class: 'note' });
-    return h('div', { class: 'card wide' },
-      h('div', { class: 'row' }, h('h3', null, `${c.name_en} · ${c.name_ar}`),
-        canEdit ? h('button', { class: 'btn ghost sm', onclick: async () => { if (confirm(`Delete "${c.name_en}" and its items?`)) { await api('DELETE', `/api/admin/menu/categories/${c.id}`, {}); render(); } } }, 'Delete category') : null),
-      c.items.length ? h('table', null, h('tbody', null, c.items.map((i) => h('tr', null,
-        h('td', null, h('strong', null, i.name_en), h('small', { class: 'muted' }, ` ${i.name_ar}`), i.description_en ? h('small', { class: 'muted block' }, i.description_en) : null),
-        h('td', null, fm(i.price_minor)),
-        h('td', null, h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: i.available, onchange: async (e) => { await api('POST', `/api/admin/menu/items/${i.id}/availability`, { available: e.target.checked }); } }), 'Available')),
-        h('td', null, canEdit ? [
-          h('button', { class: 'btn ghost sm', onclick: () => editItem(c, i, categories) }, 'Edit'), ' ',
-          h('button', { class: 'btn ghost sm', onclick: async () => { await api('DELETE', `/api/admin/menu/items/${i.id}`, {}); render(); } }, 'Delete')] : null)))))
-        : h('p', { class: 'muted' }, 'No items yet.'),
-      canEdit ? h('div', { class: 'line add-item' }, f.en, f.ar, f.price, f.desc,
-        h('button', { class: 'btn primary sm', onclick: async () => {
-          try {
-            await api('POST', '/api/admin/menu/items', { category_id: c.id, name_en: f.en.value, name_ar: f.ar.value || f.en.value, price_minor: parseMajor(f.price.value, cur()), ...(f.desc.value ? { description_en: f.desc.value } : {}) });
-            render();
-          } catch (e) { msg(res, e.code || 'Check the name and price (e.g. 12.50)'); }
-        } }, '+ Add item')) : null, res);
-  });
-
-  return h('div', { class: 'grid' }, filesCard, canEdit ? importCard : null, canEdit ? addCat : null, ...catCards);
-}
-
-function editItem(c, i, categories) {
-  const dec = decimalsOf(cur());
-  const f = {
-    cat: h('select', null, categories.map((k) => h('option', { value: k.id, selected: k.id === c.id }, k.name_en))),
-    en: h('input', { value: i.name_en }), ar: h('input', { value: i.name_ar, dir: 'rtl' }),
-    price: h('input', { value: (Number(i.price_minor) / 10 ** dec).toFixed(dec), inputmode: 'decimal' }),
-    de: h('input', { value: i.description_en ?? '', placeholder: 'Description (EN)' }), da: h('input', { value: i.description_ar ?? '', placeholder: 'الوصف', dir: 'rtl' }),
-  };
-  const out = h('p', { class: 'note' });
-  const dlg = h('div', { class: 'scrim' }, h('div', { class: 'card modal form' }, h('h2', null, 'Edit item'), Object.values(f),
-    h('div', { class: 'row gap' },
-      h('button', { class: 'btn ghost sm', onclick: () => dlg.remove() }, 'Cancel'),
-      h('button', { class: 'btn primary sm', onclick: async () => {
-        try {
-          await api('PUT', `/api/admin/menu/items/${i.id}`, {
-            category_id: f.cat.value, name_en: f.en.value, name_ar: f.ar.value, price_minor: parseMajor(f.price.value, cur()),
-            description_en: f.de.value || null, description_ar: f.da.value || null, available: i.available,
-          });
-          dlg.remove(); render();
-        } catch (e) { msg(out, e.code || 'Check the values'); }
-      } }, 'Save')), out));
-  document.body.append(dlg);
+  const cards = [
+    menuAdmin.displayCard(data, canEdit),
+    data.settings.menu_mode === 'file' ? filesCard : null,
+    data.settings.menu_mode !== 'file' ? menuAdmin.brandingCard(data, canEdit) : null,
+    data.settings.menu_mode !== 'file' ? menuAdmin.bannersCard(data, canEdit) : null,
+    canEdit ? menuAdmin.addCategoryCard() : null,
+    canEdit ? importCard : null,
+    ...categories.map((c) => menuAdmin.categoryCard(c, data, canEdit)),
+    data.settings.menu_mode !== 'file' ? filesCard : null,
+  ];
+  return h('div', { class: 'grid' }, cards);
 }

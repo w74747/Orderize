@@ -1,0 +1,56 @@
+/* Orders board (dashboard + order station) and 80 mm kitchen tickets */
+.ob { display: grid; gap: 14px; }
+.ob-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ob-status { font-size: .85rem; color: var(--good); font-weight: 600; }
+.ob-status::before { content: '●'; margin-inline-end: 6px; }
+.ob-status.err { color: var(--bad); }
+.ob-calls { display: grid; gap: 8px; }
+.ob-calls:empty { display: none; }
+.ob-call { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #fff4d6; border: 1px solid #f1d38a; animation: ob-pulse 1.6s infinite; }
+.ob-call strong { flex: 1; }
+.ob-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 860px) { .ob-cols { grid-template-columns: 1fr; } }
+.ob-col { background: #eceef1; border-radius: 16px; padding: 10px; display: grid; gap: 10px; }
+.ob-col h3 { margin: 4px 6px 0; font-size: 1rem; }
+.ob-col.c-new h3 { color: var(--warn); }
+.ob-col-list { display: grid; gap: 10px; }
+.ob-empty { text-align: center; margin: 8px 0; }
+.ob-card { background: #fff; border-radius: 14px; padding: 12px; display: grid; gap: 8px; border: 1px solid var(--line); }
+.ob-card.s-new { border: 2px solid #f0b43c; }
+.ob-card.late { animation: ob-pulse 1.4s infinite; }
+.ob-card header { display: flex; align-items: baseline; gap: 10px; }
+.ob-num { font-size: 1.3rem; }
+.ob-table { font-weight: 700; }
+.ob-time { margin-inline-start: auto; color: var(--muted); font-size: .85rem; }
+.ob-card ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 6px; }
+.ob-card li small { display: block; color: var(--muted); }
+.ob-card li em { display: block; color: #8a5a00; font-style: normal; }
+.ob-note { margin: 0; background: #fff4d6; padding: 8px 10px; border-radius: 10px; }
+.ob-card footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ob-done { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ob-done h3 { grid-column: 1 / -1; }
+.ob-done .ob-card { opacity: .75; }
+@keyframes ob-pulse { 50% { box-shadow: 0 0 0 4px rgba(240, 180, 60, .35); } }
+.num { font-variant-numeric: tabular-nums; }
+
+body.station { background: #f1f2f4; }
+.st-shell { max-width: 1400px; margin: 0 auto; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); display: grid; gap: 12px; }
+.st-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+#print-area { display: none; }
+@media print {
+  @page { size: 80mm auto; margin: 3mm; }
+  body > *:not(#print-area) { display: none !important; }
+  body { background: #fff !important; }
+  #print-area { display: block; color: #000; font-family: ui-monospace, 'Courier New', monospace; width: 72mm; }
+  .ticket { font-size: 12pt; line-height: 1.35; }
+  .tk-head { text-align: center; font-weight: 700; }
+  .tk-big { text-align: center; font-size: 17pt; font-weight: 800; margin: 2mm 0; }
+  .tk-small { text-align: center; font-size: 9pt; }
+  .tk-item { font-weight: 700; }
+  .tk-opt { padding-inline-start: 4mm; white-space: pre-line; }
+  .tk-note { font-style: italic; }
+  .tk-line { margin-bottom: 1.5mm; }
+  .tk-total { text-align: end; font-weight: 700; }
+  hr { border: 0; border-top: 1px dashed #000; margin: 2mm 0; }
+}
