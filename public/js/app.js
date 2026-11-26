@@ -194,13 +194,29 @@ function safeImg(url, cls) {
 
 const hasMenu = (m) => Boolean(m && (m.categories?.length || m.pdf || m.images?.length));
 
+function viewUploadedMenu(m) {
+  const pages = m.images ?? [];
+  return h('div', { class: 'page menu-doc' },
+    topBar({ back: () => go(S.data.require_phone && !S.data.me ? 'login' : 'home') }),
+    m.pdf ? h('a', { class: 'menu-pdf', href: `/media/${m.pdf}`, target: '_blank', rel: 'noopener' },
+      h('span', { class: 'menu-pdf-ic' }, icon(I.menu)),
+      h('span', null, h('strong', null, t('openPdf')), h('small', null, t('pdfHint'))),
+      h('span', { class: 'menu-pdf-go' }, '›')) : null,
+    pages.length ? h('div', { class: 'menu-pages' },
+      pages.map((id, i) => h('figure', { class: 'menu-sheet' },
+        h('a', { href: `/media/${id}`, target: '_blank', rel: 'noopener' },
+          h('img', { src: `/media/${id}`, alt: `${t('menu')} ${i + 1}`, loading: i ? 'lazy' : 'eager', decoding: 'async' })),
+        pages.length > 1 ? h('figcaption', null, `${i + 1} / ${pages.length}`) : null))) : null,
+    S.data.bill?.remaining_minor > 0 ? h('div', { class: 'dock' }, h('button', { class: 'btn primary big', onclick: () => go('pay') }, t('payNow'))) : null,
+  );
+}
+
 function viewMenu() {
   const m = S.data.restaurant.menu;
+  if (m.pdf || m.images?.length) return viewUploadedMenu(m);
   const desc = (it) => (S.lang === 'ar' ? it.description_ar || it.description_en : it.description_en || it.description_ar);
   return h('div', { class: 'page' },
     topBar({ back: () => go(S.data.require_phone && !S.data.me ? 'login' : 'home') }),
-    m.pdf ? h('section', { class: 'card' },
-      h('a', { class: 'btn soft big', href: `/media/${m.pdf}`, target: '_blank', rel: 'noopener' }, icon(I.menu), t('openPdf'))) : null,
     h('div', { class: 'menu' },
       m.categories.map((cat) => h('section', { class: 'card' },
         h('h2', null, nm(cat)),
@@ -209,9 +225,6 @@ function viewMenu() {
           desc(it) ? h('small', { class: 'muted' }, desc(it)) : null)),
       )),
     ),
-    m.images?.length ? h('section', { class: 'card' }, h('h2', null, t('menuPhotos')),
-      m.images.map((id) => h('a', { href: `/media/${id}`, target: '_blank', rel: 'noopener' },
-        h('img', { class: 'menu-page', src: `/media/${id}`, alt: t('menu'), loading: 'lazy' })))) : null,
     S.data.bill?.remaining_minor > 0 ? h('div', { class: 'dock' }, h('button', { class: 'btn primary big', onclick: () => go('pay') }, t('payNow'))) : null,
   );
 }

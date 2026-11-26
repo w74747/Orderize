@@ -114,6 +114,9 @@ test('menu files are served safely and only for active restaurants', async () =>
   const v = (await app.inject({ url: `/api/t/${S.demoToken}` })).json();
   assert.ok(v.restaurant.menu.pdf);
   assert.equal(v.restaurant.menu.images.length, 20);
+  assert.deepEqual(v.restaurant.menu.categories, [], 'uploaded menu replaces the item list for diners');
+  const staffItems = await as(owner)('GET', '/api/admin/menu');
+  assert.ok(staffItems.json().categories.some((c) => c.items.length), 'items stay available to staff for the bill');
   const pdf = await app.inject({ url: `/media/${v.restaurant.menu.pdf}` });
   assert.equal(pdf.headers['content-type'], 'application/pdf');
   assert.equal(pdf.headers['x-content-type-options'], 'nosniff');

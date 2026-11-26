@@ -236,13 +236,16 @@ export async function publicMenu(db, restaurant) {
     ),
     db.query(`SELECT id, kind FROM media WHERE restaurant_id = $1 ORDER BY position, created_at`, [restaurant.id]),
   ]);
+  const pdf = files.rows.find((f) => f.kind === 'menu_pdf')?.id ?? null;
+  const images = files.rows.filter((f) => f.kind === 'menu_image').map((f) => f.id);
+  // When the restaurant uploaded its own menu (PDF/photos), diners see only that design.
+  // The item list then stays internal: it is what staff pick from to build the bill.
+  if (pdf || images.length) return { categories: [], pdf, images };
   const categories = cats.rows.length
     ? cats.rows.map((c) => ({ name_en: c.name_en, name_ar: c.name_ar, items: items.rows.filter((i) => i.category_id === c.id).map(({ category_id, ...i }) => i) }))
       .filter((c) => c.items.length)
     : restaurant.menu ?? [];
   return {
-    categories,
-    pdf: files.rows.find((f) => f.kind === 'menu_pdf')?.id ?? null,
-    images: files.rows.filter((f) => f.kind === 'menu_image').map((f) => f.id),
+    categories, pdf: null, images: [],
   };
 }

@@ -551,7 +551,7 @@ async function viewMenuAdmin() {
 
   const fileInput = h('input', { type: 'file', accept: 'application/pdf,image/jpeg,image/png,image/webp', multiple: true });
   const filesCard = h('div', { class: 'card' }, h('h3', null, 'Menu files (PDF or photos)'),
-    h('p', { class: 'muted' }, 'Diners can browse these from "View menu". One PDF (max 10 MB) and up to 20 photos (max 5 MB each).'),
+    h('p', { class: 'muted' }, 'When you upload a menu here, diners see only this file under "View menu" — your own design. The item list below is then used only by your staff to build each table\'s bill. One PDF (max 10 MB) and up to 20 photos (max 5 MB each).'),
     canEdit ? [fileInput, h('button', { class: 'btn primary sm', onclick: async () => {
       try {
         for (const f of fileInput.files) await upload(f);
