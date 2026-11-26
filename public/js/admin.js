@@ -5,6 +5,7 @@ const root = document.getElementById('admin');
 let me = null;
 let summary = null;
 let tab = 'tables';
+let flash = '';
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -80,7 +81,7 @@ async function view2fa(forced) {
 
 // ---------- shell
 function shell(content) {
-  const tabs = [['tables', 'Tables & bills'], ['payments', 'Payments'], ['offers', 'Offers'], ['settings', 'Security & POS']];
+  const tabs = [['tables', 'Tables & bills'], ['payments', 'Payments'], ['pos', 'POS integration'], ['offers', 'Offers'], ['settings', 'Security & API']];
   return h('div', { class: 'shell' },
     h('header', { class: 'bar' },
       h('strong', null, summary.restaurant.name_en),
@@ -96,7 +97,7 @@ const kpi = (l, v) => h('div', { class: 'kpi' }, h('small', null, l), h('strong'
 
 async function render() {
   summary = await api('GET', '/api/admin/summary');
-  const views = { tables: viewTables, payments: viewPayments, offers: viewOffers, settings: viewSettings };
+  const views = { tables: viewTables, payments: viewPayments, pos: viewPos, offers: viewOffers, settings: viewSettings };
   root.replaceChildren(shell(await views[tab]()));
 }
 
@@ -110,6 +111,8 @@ async function viewTables() {
       h('div', { class: 'row' }, h('h3', null, t.label),
         t.bill_id ? h('span', { class: 'chip warn' }, `Open · ${fm(t.total_minor - t.paid_minor)} left`) : h('span', { class: 'chip' }, 'Free')),
       h('img', { class: 'qr', alt: `QR for ${t.label}`, src: `/api/admin/tables/${t.id}/qr.svg`, loading: 'lazy' }),
+      t.external_id || t.external_name ? h('small', { class: 'muted' }, `POS table: ${t.external_name ?? t.external_id}`) : null,
+      t.bill_id && t.source !== 'manual' ? h('small', { class: 'muted' }, `Bill source: ${t.source}`) : null,
       h('div', { class: 'row gap' },
         h('a', { class: 'btn soft sm', href: `/api/admin/tables/${t.id}/qr.svg`, download: `qr-${t.label}.svg` }, 'Download QR'),
         t.bill_id ? h('button', { class: 'btn soft sm', onclick: () => voidBill(t) }, 'Void bill') : h('button', { class: 'btn primary sm', onclick: () => billForm(t) }, 'New bill'),
@@ -229,6 +232,12 @@ async function viewSettings() {
 }
 
 async function boot() {
+  const m = location.hash.match(/^#integrations=(.+)$/);
+  if (m) {
+    tab = 'pos';
+    flash = m[1] === 'connected' ? 'Connected. Now choose your branch below.' : `Connection failed: ${decodeURIComponent(m[1])}`;
+    history.replaceState(null, '', '/admin');
+  }
   try {
     const r = await api('GET', '/api/admin/me');
     me = r.user;
@@ -241,3 +250,119 @@ async function boot() {
   }
 }
 boot();
+
+// ---------- POS integration
+async function viewPos() {
+  const out = h('p', { class: flash.startsWith('Connection failed') ? 'note err' : 'note ok' }, flash);
+  flash = '';
+  const parts = [];
+  const err = (e) => { out.className = 'note err'; out.textContent = e.code || 'Error'; };
+
+  if (me.role !== 'staff') {
+    const info = await api('GET', '/api/admin/integration');
+    const c = info.connection;
+    const prov = (n) => info.providers.find((p) => p.name === n);
+    parts.push(h('div', { class: 'card wide' },
+      h('h3', null, 'Connection'),
+      c ? h('div', { class: 'row gap' },
+        h('strong', null, prov(c.provider)?.label ?? c.provider),
+        h('span', { class: `chip ${c.status === 'active' ? 'captured' : c.status === 'error' ? 'bad' : 'warn'}` }, c.status),
+        c.last_sync_at ? h('small', { class: 'muted' }, `last sync ${new Date(c.last_sync_at).toLocaleString()}`) : null,
+        me.role === 'owner' ? h('button', { class: 'btn ghost sm', onclick: async () => {
+          if (!confirm('Disconnect the POS? Stored tokens will be deleted.')) return;
+          await api('POST', '/api/admin/integration/disconnect', {}); render();
+        } }, 'Disconnect') : null)
+        : h('p', null, 'No POS connected. Bills are entered in this dashboard or sent through the signed POS API.'),
+      c?.last_error ? h('p', { class: 'note err' }, `Last error: ${c.last_error}`) : null,
+      out));
+
+    if (c?.provider === 'foodics') {
+      const sel = h('select', null, h('option', { value: '' }, 'Loading branches…'));
+      api('GET', '/api/admin/integration/branches').then(({ branches }) => {
+        sel.replaceChildren(h('option', { value: '' }, 'Choose branch'), ...branches.map((b) => h('option', { value: b.id, selected: b.id === c.config.branch_id }, `${b.name} · ${b.name_ar}`)));
+      }).catch(err);
+      parts.push(h('div', { class: 'card' }, h('h3', null, 'Foodics branch & tables'),
+        h('p', null, 'Bills are read live from the open order on each table. Payments are queued below for the cashier to record in Foodics.'),
+        sel,
+        h('div', { class: 'row gap' },
+          h('button', { class: 'btn primary sm', disabled: me.role !== 'owner', onclick: async () => {
+            try { await api('POST', '/api/admin/integration/branch', { branch_id: sel.value }); flash = 'Branch saved.'; render(); } catch (e) { err(e); }
+          } }, 'Save branch'),
+          h('button', { class: 'btn soft sm', onclick: async () => {
+            try { const r = await api('POST', '/api/admin/integration/sync-tables', {}); out.className = 'note ok'; out.textContent = `Tables: ${r.matched} matched, ${r.created} created (${r.total} in Foodics).`; } catch (e) { err(e); }
+          } }, 'Import tables from Foodics'))));
+    }
+
+    if (c?.provider === 'simphony') parts.push(await simphonyMapping());
+
+    if (me.role === 'owner') {
+      const f = prov('foodics');
+      parts.push(h('div', { class: 'card' }, h('h3', null, 'Foodics'),
+        h('p', null, 'Live bills from Foodics via OAuth. You approve access inside Foodics; no password is shared.'),
+        f.available ? h('button', { class: 'btn primary sm', onclick: async () => {
+          try { const { url } = await api('POST', '/api/admin/integration/oauth/start', { provider: 'foodics' }); location.assign(url); } catch (e) { err(e); }
+        } }, c?.provider === 'foodics' ? 'Reconnect Foodics' : 'Connect Foodics')
+          : h('p', { class: 'note err' }, 'Not available yet: the platform needs its Foodics app credentials (FOODICS_CLIENT_ID / SECRET).')));
+
+      const sf = {
+        host: h('input', { placeholder: 'https://<your-sts-host>', value: c?.provider === 'simphony' ? c.config.host : '' }),
+        org: h('input', { placeholder: 'Org short name' }), loc: h('input', { placeholder: 'Location ref' }),
+        rvc: h('input', { placeholder: 'Revenue center ref', inputmode: 'numeric' }),
+        tender_id: h('input', { placeholder: 'Tender id for Sufra payments', inputmode: 'numeric' }),
+        employee_ref: h('input', { placeholder: 'Employee ref (API employee)', inputmode: 'numeric' }),
+        client_id: h('input', { placeholder: 'API account client id', autocomplete: 'off' }),
+        refresh_token: h('input', { placeholder: 'API account refresh token', type: 'password', autocomplete: 'off' }),
+      };
+      parts.push(h('div', { class: 'card form' }, h('h3', null, 'Oracle Simphony (STS Gen2)'),
+        h('p', null, 'Live checks by table name, and every payment is posted back to the check automatically. Credentials are tested before saving and stored encrypted.'),
+        Object.values(sf),
+        h('button', { class: 'btn primary sm', onclick: async () => {
+          try { await api('POST', '/api/admin/integration/simphony', Object.fromEntries(Object.entries(sf).map(([k, v]) => [k, v.value.trim()]))); flash = 'Simphony connected.'; render(); } catch (e) { err(e); }
+        } }, 'Test & connect')));
+
+      parts.push(h('div', { class: 'card' }, h('h3', null, 'Loyverse & other POS'),
+        h('p', null, "Loyverse's API exposes only closed receipts, not open tickets, so bills can't be read live. Use this mode: bills come from this dashboard or the signed POS API, and every Sufra payment is listed below for staff to record in the POS."),
+        h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', '/api/admin/integration/manual', {}); flash = 'Manual reconciliation enabled.'; render(); } }, 'Use manual reconciliation')));
+    }
+  }
+
+  parts.push(await writebacksCard());
+  return h('div', { class: 'grid' }, parts);
+}
+
+async function simphonyMapping() {
+  const { tables } = await api('GET', '/api/admin/tables');
+  return h('div', { class: 'card wide' }, h('h3', null, 'Simphony table mapping'),
+    h('p', { class: 'muted' }, 'Enter the table name/number exactly as it appears in Simphony, then use "Check" to see the live check.'),
+    h('table', null, h('tbody', null, tables.map((t) => {
+      const inp = h('input', { value: t.external_name ?? '', placeholder: 'e.g. 12' });
+      const res = h('small', { class: 'muted' });
+      return h('tr', null, h('td', null, t.label), h('td', null, inp),
+        h('td', null, h('button', { class: 'btn soft sm', onclick: async () => {
+          try { await api('POST', `/api/admin/tables/${t.id}/mapping`, { external_name: inp.value.trim() || null }); res.textContent = 'Saved'; } catch (e) { res.textContent = e.code; }
+        } }, 'Save'), ' ',
+        h('button', { class: 'btn ghost sm', onclick: async () => {
+          try { const r = await api('POST', `/api/admin/tables/${t.id}/pos-sync`, {}); res.textContent = r.error ? `POS error: ${r.error}` : r.synced ? 'Synced — see Tables tab' : 'Not synced'; } catch (e) { res.textContent = e.code; }
+        } }, 'Check')),
+        h('td', null, res));
+    }))));
+}
+
+async function writebacksCard() {
+  const { writebacks } = await api('GET', '/api/admin/writebacks');
+  const pending = writebacks.filter((w) => w.status !== 'done');
+  return h('div', { class: 'card wide' },
+    h('h3', null, `Payments to record in the POS (${pending.length})`),
+    writebacks.length ? h('table', null,
+      h('thead', null, h('tr', null, ['Table', 'Amount', 'Tip', 'Card', 'Mode', 'Status', ''].map((c) => h('th', null, c)))),
+      h('tbody', null, writebacks.map((w) => h('tr', null,
+        h('td', null, w.table_label), h('td', null, formatMoney(Number(w.share_minor), w.currency, 'en')),
+        h('td', null, formatMoney(Number(w.tip_minor), w.currency, 'en')),
+        h('td', null, w.card_last4 ? `${w.card_brand ?? ''} ••${w.card_last4}` : '—'),
+        h('td', null, w.mode === 'auto' ? 'automatic' : 'staff'),
+        h('td', null, h('span', { class: `chip ${w.status === 'done' ? 'captured' : w.status === 'failed' ? 'bad' : 'warn'}` }, w.status), w.last_error ? h('small', { class: 'muted' }, ` ${w.last_error}`) : null),
+        h('td', null,
+          w.status !== 'done' && w.mode === 'manual' ? h('button', { class: 'btn primary sm', onclick: async () => { await api('POST', `/api/admin/writebacks/${w.payment_id}/done`, {}); render(); } }, 'Recorded in POS') : null,
+          w.status === 'failed' && w.mode === 'auto' && me.role !== 'staff' ? h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', `/api/admin/writebacks/${w.payment_id}/retry`, {}); render(); } }, 'Retry') : null)))))
+      : h('p', { class: 'muted' }, 'Nothing to record.'));
+}

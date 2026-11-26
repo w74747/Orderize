@@ -22,6 +22,13 @@ const schema = z
     COOKIE_SECURE: bool.default(true),
     REQUIRE_2FA: bool.default(false),
     TRUST_PROXY: bool.default(true),
+    // POS integrations (platform-level app credentials; per-restaurant tokens live encrypted in the DB)
+    FOODICS_CLIENT_ID: z.string().optional(),
+    FOODICS_CLIENT_SECRET: z.string().optional(),
+    FOODICS_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+    FOODICS_API_BASE: z.string().optional(),      // tests only
+    FOODICS_CONSOLE_BASE: z.string().optional(),  // tests only
+    ALLOW_PRIVATE_POS_HOSTS: z.enum(['true', 'false']).default('false'), // tests only
     RESERVATION_TTL_MIN: z.coerce.number().int().min(5).max(60).default(15),
     LOG_LEVEL: z.string().default('info'),
   })
@@ -34,6 +41,9 @@ const schema = z
       if (!c.PUBLIC_BASE_URL.startsWith('https://')) {
         ctx.addIssue({ code: 'custom', message: 'PUBLIC_BASE_URL must be https in production' });
       }
+    }
+    if (c.NODE_ENV === 'production' && (c.ALLOW_PRIVATE_POS_HOSTS === 'true' || c.FOODICS_API_BASE)) {
+      ctx.addIssue({ code: 'custom', message: 'POS test overrides are not allowed in production' });
     }
     if (c.PAYMENT_PROVIDER === 'tap' && (!c.TAP_SECRET_KEY || !c.TAP_WEBHOOK_SECRET)) {
       ctx.addIssue({ code: 'custom', message: 'TAP_SECRET_KEY and TAP_WEBHOOK_SECRET are required' });

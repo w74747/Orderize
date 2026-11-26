@@ -6,6 +6,7 @@ import { HttpError } from '../services/bills.js';
 import { login, logout, publicUser, ROLE_RANK, sessionUser } from '../services/auth.js';
 import * as S from './schemas.js';
 import crypto from 'node:crypto';
+import integrationRoutes from './integrations.js';
 
 export default async function adminRoutes(app, { ctx }) {
   const { pool, config, cipher } = ctx;
@@ -95,7 +96,7 @@ export default async function adminRoutes(app, { ctx }) {
 
   app.get('/api/admin/tables', { preHandler: auth('staff') }, async (req) => {
     const { rows } = await pool.query(
-      `SELECT t.id, t.label, t.active, b.id AS bill_id, b.total_minor,
+      `SELECT t.id, t.label, t.active, t.external_id, t.external_name, b.id AS bill_id, b.total_minor, b.source,
               (SELECT coalesce(sum(share_minor),0) FROM payments p WHERE p.bill_id = b.id AND p.status = 'captured')::bigint AS paid_minor
          FROM dining_tables t LEFT JOIN bills b ON b.table_id = t.id AND b.status = 'open'
         WHERE t.restaurant_id = $1 ORDER BY t.label`,
@@ -214,6 +215,8 @@ export default async function adminRoutes(app, { ctx }) {
     return { pos_key: key, pos_secret: secret, note: 'Store these now. The secret cannot be shown again.' };
   });
 
+  await integrationRoutes(app, { ctx, auth, rid });
+
   app.get('/api/admin/audit', { preHandler: auth('owner') }, async (req) => {
     const { rows } = await pool.query(
       `SELECT at, actor_type, actor_id, action, target, ip, meta FROM audit_log
@@ -239,9 +242,10 @@ export async function openBill(pool, restaurantId, tableId, body, actor) {
     let bill;
     try {
       ({ rows: [bill] } = await c.query(
-        `INSERT INTO bills(restaurant_id, table_id, external_ref, currency, total_minor, vat_minor)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, total_minor, currency`,
-        [restaurantId, tableId, body.external_ref ?? null, t.rows[0].currency, total, body.vat_minor],
+        `INSERT INTO bills(restaurant_id, table_id, external_ref, currency, total_minor, vat_minor, source)
+         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, total_minor, currency`,
+        [restaurantId, tableId, body.external_ref ?? null, t.rows[0].currency, total, body.vat_minor,
+          actor.actorType === 'pos' ? 'pos_api' : 'manual'],
       ));
     } catch (e) {
       if (e.code === '23505') throw new HttpError(409, 'TABLE_HAS_OPEN_BILL');

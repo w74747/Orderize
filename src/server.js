@@ -10,6 +10,10 @@ import { ZodError } from 'zod';
 import { makeCipher } from './lib/crypto.js';
 import { createProvider } from './payments/index.js';
 import { HttpError, expireStalePayments } from './services/bills.js';
+import { createConnectors } from './pos/connectors/index.js';
+import { processWritebacks } from './pos/service.js';
+import { PosError } from './pos/http.js';
+import { oauthCallbackRoutes } from './routes/integrations.js';
 import publicRoutes from './routes/public.js';
 import webhookRoutes from './routes/webhooks.js';
 import sandboxRoutes from './routes/sandbox.js';
@@ -31,7 +35,10 @@ export async function buildApp({ config, pool, logger = true }) {
     routerOptions: { maxParamLength: 100 },
   });
 
-  const ctx = { pool, config, provider: createProvider(config), cipher: makeCipher(config.APP_SECRET), log: app.log };
+  const ctx = {
+    pool, config, provider: createProvider(config), cipher: makeCipher(config.APP_SECRET), log: app.log,
+    connectors: createConnectors(config),
+  };
   app.decorate('ctx', ctx);
 
   await app.register(helmet, {
@@ -59,6 +66,7 @@ export async function buildApp({ config, pool, logger = true }) {
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code });
+    if (err instanceof PosError) return reply.code(err.code === 'POS_UNREACHABLE' ? 502 : 422).send({ error: err.code });
     if (err instanceof ZodError) {
       return reply.code(400).send({ error: 'VALIDATION_FAILED', fields: err.issues.map((i) => i.path.join('.')) });
     }
@@ -83,11 +91,14 @@ export async function buildApp({ config, pool, logger = true }) {
   await app.register(webhookRoutes, { ctx });
   await app.register(adminRoutes, { ctx });
   await app.register(posRoutes, { ctx });
+  await app.register(oauthCallbackRoutes, { ctx });
   if (config.PAYMENT_PROVIDER === 'sandbox') await app.register(sandboxRoutes, { ctx });
 
   const timer = setInterval(() => expireStalePayments(pool).catch((e) => app.log.error(e)), 60_000);
   timer.unref();
-  app.addHook('onClose', async () => clearInterval(timer));
+  const wb = setInterval(() => processWritebacks(ctx).catch((e) => app.log.error(e)), 15_000);
+  wb.unref();
+  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); });
 
   return app;
 }

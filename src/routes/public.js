@@ -6,7 +6,7 @@ export default async function publicRoutes(app, { ctx }) {
 
   app.get('/api/t/:token', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req, reply) => {
     reply.header('cache-control', 'no-store');
-    return publicView(pool, req.params.token);
+    return publicView(ctx, req.params.token);
   });
 
   app.post('/api/t/:token/quote', { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) => {

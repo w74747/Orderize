@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { tx } from '../db.js';
 import { audit } from '../lib/audit.js';
 import { BillingError, quote, remainingOf } from '../../shared/billing.js';
+import { syncTableBill } from '../pos/service.js';
 
 export class HttpError extends Error {
   constructor(status, code) {
@@ -27,7 +28,7 @@ export function policyOf(r) {
 export async function findTable(db, token) {
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{22,64}$/.test(token)) return null;
   const { rows } = await db.query(
-    `SELECT t.id AS table_id, t.label, r.*
+    `SELECT t.id AS table_id, t.label, t.external_id, t.external_name, r.*
        FROM dining_tables t JOIN restaurants r ON r.id = t.restaurant_id
       WHERE t.public_token = $1 AND t.active AND r.active`,
     [token],
@@ -62,7 +63,8 @@ async function hydrate(db, bill) {
   const sq = new Map(settledItems.rows.map((r) => [r.id, r.q]));
   return {
     ...bill,
-    settled_minor: settled.rows[0].s,
+    // Paid in Sufra (captured or being paid now) + paid directly at the POS (cash, card machine).
+    settled_minor: settled.rows[0].s + (bill.external_paid_minor ?? 0),
     payments_count: paidCount.rows[0].n,
     items: items.rows.map((i) => ({ ...i, settled_qty: sq.get(i.id) ?? 0 })),
   };
@@ -101,9 +103,11 @@ async function resolveOffer(db, restaurant, { offer_id, promo_code }) {
 }
 
 /** Public, read-only view of a table's bill. Exposes nothing about other diners. */
-export async function publicView(db, token) {
+export async function publicView(ctx, token) {
+  const db = ctx.pool;
   const r = await findTable(db, token);
   if (!r) throw new HttpError(404, 'NOT_FOUND');
+  const sync = await syncTableBill(ctx, r, r);
   const bill = await loadOpenBill(db, r.table_id);
   const offers = await activeBankOffers(db, r);
   return {
@@ -112,6 +116,7 @@ export async function publicView(db, token) {
       logo_url: r.logo_url, cover_url: r.cover_url, brand_color: r.brand_color, menu: r.menu,
     },
     table: { label: r.label },
+    pos_unavailable: Boolean(sync.stale),
     policy: policyOf(r),
     offers,
     bill: bill && {
@@ -151,7 +156,14 @@ const canonical = (o) => JSON.stringify(o, Object.keys(o).sort());
  * Creates a pending payment. The amount is computed ONLY on the server.
  * The bill row is locked so concurrent diners cannot over-pay the same bill.
  */
-export async function createPayment({ pool, provider, config, log }, { token, body, idemKey, ip }) {
+export async function createPayment(ctx, { token, body, idemKey, ip }) {
+  const { pool, provider, config, log } = ctx;
+  // Live POS bills must be fresh before anyone pays: never charge against a stale bill.
+  const pre = await findTable(pool, token);
+  if (!pre) throw new HttpError(404, 'NOT_FOUND');
+  const sync = await syncTableBill(ctx, pre, pre);
+  if (sync.stale) throw new HttpError(503, 'POS_UNAVAILABLE');
+
   const requestHash = crypto.createHash('sha256').update(canonical({
     split: JSON.stringify(body.split), tip: JSON.stringify(body.tip ?? null),
     offer_id: body.offer_id ?? null, promo_code: body.promo_code ?? null,
@@ -259,7 +271,7 @@ export async function applyProviderEvent(pool, providerName, evt) {
       if (!red.rowCount) flags.push('offer_exhausted');
     }
     const { rows: bills } = await c.query(
-      `SELECT b.total_minor, coalesce(sum(p.share_minor) FILTER (WHERE p.status = 'captured'), 0)::bigint AS captured
+      `SELECT b.total_minor, b.external_paid_minor + coalesce(sum(p.share_minor) FILTER (WHERE p.status = 'captured'), 0)::bigint AS captured
          FROM bills b LEFT JOIN payments p ON p.bill_id = b.id WHERE b.id = $1 GROUP BY b.id`,
       [p.bill_id],
     );
@@ -274,6 +286,16 @@ export async function applyProviderEvent(pool, providerName, evt) {
     if (fullyPaid) {
       await c.query(`UPDATE bills SET status = 'paid', closed_at = now() WHERE id = $1 AND status = 'open'`, [p.bill_id]);
     }
+    // Record the payment in the restaurant's POS: automatically when the POS supports it,
+    // otherwise queued for staff to confirm in the dashboard.
+    await c.query(
+      `INSERT INTO pos_writebacks(payment_id, restaurant_id, mode)
+       SELECT $1, $2, CASE WHEN pc.provider = 'simphony' AND b.source = 'simphony' THEN 'auto' ELSE 'manual' END
+         FROM pos_connections pc JOIN bills b ON b.id = $3
+        WHERE pc.restaurant_id = $2 AND pc.status <> 'disabled'
+       ON CONFLICT DO NOTHING`,
+      [p.id, p.restaurant_id, p.bill_id],
+    );
     await c.query(
       `INSERT INTO outbox(restaurant_id, type, payload) VALUES ($1, 'payment.captured', $2)`,
       [p.restaurant_id, { payment_id: p.id, bill_id: p.bill_id, share_minor: p.share_minor, tip_minor: p.tip_minor,
