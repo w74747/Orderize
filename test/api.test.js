@@ -21,6 +21,7 @@ before(async () => {
   pool = createPool(config.DATABASE_URL);
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   S = await seed(pool, { ownerPassword: 'CorrectHorse2026', quiet: true });
+  await pool.query('UPDATE restaurants SET require_phone = false'); // these suites test payments without diner sign-in
   app = await buildApp({ config, pool, logger: false });
 });
 after(async () => { await app.close(); await pool.end(); });

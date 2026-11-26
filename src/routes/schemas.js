@@ -24,6 +24,7 @@ export const payRequest = z.strictObject({
   tip: tip.default({ type: 'none' }),
   offer_id: uuid.optional(),
   promo_code: z.string().regex(/^[A-Za-z0-9-]{3,32}$/).optional(),
+  coupon_id: uuid.optional(),
   marketing_consent: z.boolean().optional(),
 });
 
@@ -75,3 +76,19 @@ export const newPassword = z
   .min(12)
   .max(200)
   .refine((p) => /[a-z]/i.test(p) && /\d/.test(p), 'password must contain letters and digits');
+
+export const otpRequest = z.strictObject({
+  country: z.string().regex(/^\+?\d{1,4}$/),
+  phone: z.string().min(6).max(20),
+});
+export const otpVerify = z.strictObject({ challenge_id: uuid, code: z.string().regex(/^\d{6}$/) });
+export const profile = z.strictObject({
+  name: z.string().trim().min(2).max(60),
+  gender: z.enum(['male', 'female']),
+  birth_date: z.iso.date().refine((d) => {
+    const age = (Date.now() - Date.parse(d)) / (365.25 * 864e5);
+    return age >= 13 && age <= 110;
+  }, 'age must be 13-110'),
+  marketing_consent: z.boolean().default(false),
+});
+export const rating = z.strictObject({ stars: z.number().int().min(1).max(5), comment: z.string().trim().max(1000).optional() });

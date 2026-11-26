@@ -14,6 +14,9 @@ import { createConnectors } from './pos/connectors/index.js';
 import { processWritebacks } from './pos/service.js';
 import { PosError } from './pos/http.js';
 import { oauthCallbackRoutes } from './routes/integrations.js';
+import meRoutes from './routes/me.js';
+import { createWhatsApp } from './lib/whatsapp.js';
+import { runBirthdayCampaigns } from './services/campaigns.js';
 import publicRoutes from './routes/public.js';
 import webhookRoutes from './routes/webhooks.js';
 import sandboxRoutes from './routes/sandbox.js';
@@ -39,6 +42,7 @@ export async function buildApp({ config, pool, logger = true }) {
     pool, config, provider: createProvider(config), cipher: makeCipher(config.APP_SECRET), log: app.log,
     connectors: createConnectors(config),
   };
+  ctx.whatsapp = createWhatsApp(config, pool, app.log);
   app.decorate('ctx', ctx);
 
   await app.register(helmet, {
@@ -85,6 +89,8 @@ export async function buildApp({ config, pool, logger = true }) {
   app.get('/t/:token', spa('index.html'));
   app.get('/pay/return', spa('index.html'));
   app.get('/admin', spa('admin.html'));
+  app.get('/platform', spa('platform.html'));
+  app.get('/me', spa('index.html'));
   app.get('/healthz', async () => ({ ok: true }));
 
   await app.register(publicRoutes, { ctx });
@@ -92,13 +98,17 @@ export async function buildApp({ config, pool, logger = true }) {
   await app.register(adminRoutes, { ctx });
   await app.register(posRoutes, { ctx });
   await app.register(oauthCallbackRoutes, { ctx });
+  await app.register(meRoutes, { ctx });
   if (config.PAYMENT_PROVIDER === 'sandbox') await app.register(sandboxRoutes, { ctx });
 
   const timer = setInterval(() => expireStalePayments(pool).catch((e) => app.log.error(e)), 60_000);
   timer.unref();
   const wb = setInterval(() => processWritebacks(ctx).catch((e) => app.log.error(e)), 15_000);
   wb.unref();
-  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); });
+  // Birthday coupons: idempotent per customer per year, so running often is safe.
+  const bday = setInterval(() => runBirthdayCampaigns(ctx).catch((e) => app.log.error(e)), 6 * 3600_000);
+  bday.unref();
+  app.addHook('onClose', async () => { clearInterval(timer); clearInterval(wb); clearInterval(bday); });
 
   return app;
 }

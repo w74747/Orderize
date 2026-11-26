@@ -13,6 +13,7 @@ function h(tag, attrs, ...kids) {
     if (v == null || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'class') el.className = v;
+    else if (k === 'style') el.style.cssText = v; // CSSOM, allowed by our CSP (inline style attributes are not)
     else el.setAttribute(k, v === true ? '' : v);
   }
   for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
@@ -81,7 +82,7 @@ async function view2fa(forced) {
 
 // ---------- shell
 function shell(content) {
-  const tabs = [['tables', 'Tables & bills'], ['payments', 'Payments'], ['pos', 'POS integration'], ['offers', 'Offers'], ['settings', 'Security & API']];
+  const tabs = [['tables', 'Tables & bills'], ['payments', 'Payments'], ['customers', 'Customers'], ['campaigns', 'Coupons & campaigns'], ['ratings', 'Ratings'], ['pos', 'POS integration'], ['offers', 'Promo codes'], ['settings', 'Settings & security']];
   return h('div', { class: 'shell' },
     h('header', { class: 'bar' },
       h('strong', null, summary.restaurant.name_en),
@@ -97,7 +98,7 @@ const kpi = (l, v) => h('div', { class: 'kpi' }, h('small', null, l), h('strong'
 
 async function render() {
   summary = await api('GET', '/api/admin/summary');
-  const views = { tables: viewTables, payments: viewPayments, pos: viewPos, offers: viewOffers, settings: viewSettings };
+  const views = { tables: viewTables, payments: viewPayments, customers: viewCustomers, campaigns: viewCampaigns, ratings: viewRatings, pos: viewPos, offers: viewOffers, settings: viewSettings };
   root.replaceChildren(shell(await views[tab]()));
 }
 
@@ -215,8 +216,9 @@ async function viewSettings() {
       h('p', null, me.totp_enabled ? 'Enabled on your account.' : 'Not enabled. Strongly recommended for every account.'),
       me.totp_enabled ? null : h('button', { class: 'btn primary sm', onclick: () => view2fa(false) }, 'Set up 2FA')),
   ];
+  if (me.role === 'owner') cards.unshift(await restaurantSettingsCard());
   if (me.role === 'owner') {
-    cards.push(h('div', { class: 'card' }, h('h3', null, 'POS integration'),
+    cards.push(h('div', { class: 'card' }, h('h3', null, 'POS API (custom integration)'),
       h('p', null, 'Generate credentials for your POS to push bills (HMAC-signed). Generating new ones revokes the old ones immediately.'),
       h('button', { class: 'btn soft sm', onclick: async () => {
         if (!confirm('Generate new POS credentials? The current ones will stop working.')) return;
@@ -241,6 +243,7 @@ async function boot() {
   try {
     const r = await api('GET', '/api/admin/me');
     me = r.user;
+    if (me.role === 'platform_admin' && !r.mfa_required) return location.assign('/platform');
     if (r.mfa_required) return view2fa(true);
     await render();
   } catch (e) {
@@ -365,4 +368,132 @@ async function writebacksCard() {
           w.status !== 'done' && w.mode === 'manual' ? h('button', { class: 'btn primary sm', onclick: async () => { await api('POST', `/api/admin/writebacks/${w.payment_id}/done`, {}); render(); } }, 'Recorded in POS') : null,
           w.status === 'failed' && w.mode === 'auto' && me.role !== 'staff' ? h('button', { class: 'btn soft sm', onclick: async () => { await api('POST', `/api/admin/writebacks/${w.payment_id}/retry`, {}); render(); } }, 'Retry') : null)))))
       : h('p', { class: 'muted' }, 'Nothing to record.'));
+}
+
+// ---------- customers (CRM)
+async function viewCustomers() {
+  if (me.role === 'staff') return h('p', { class: 'card' }, 'Managers only.');
+  const s = await api('GET', '/api/admin/customers');
+  const k = s.kpi;
+  const pct = k.customers ? Math.round((k.returning / k.customers) * 100) : 0;
+  const maxB = Math.max(1, ...s.buckets.map((b) => b.customers));
+  return h('div', { class: 'grid' },
+    h('section', { class: 'kpis wide' },
+      kpi('Customers', k.customers), kpi('New (30 days)', k.new_30d), kpi('Returning', `${pct}%`),
+      kpi('Avg visits / customer', k.avg_visits), kpi('Avg ticket', fm(k.avg_ticket_minor)),
+      kpi('Rating (30 days)', `${k.rating.avg_30d} ★ · ${k.rating.count_30d}`)),
+    h('div', { class: 'card' }, h('h3', null, 'Visit frequency'),
+      h('p', { class: 'muted' }, 'Customers by number of visits (distinct days).'),
+      s.buckets.map((b) => h('div', { class: 'bar-row' },
+        h('span', null, `${b.bucket} visit${b.bucket === '1' ? '' : 's'}`),
+        h('div', { class: 'bar' }, h('i', { style: `width:${Math.round((b.customers / maxB) * 100)}%` })),
+        h('strong', null, b.customers)))),
+    h('div', { class: 'card wide' }, h('h3', null, 'Top customers'),
+      s.top.length ? h('table', null,
+        h('thead', null, h('tr', null, ['Name', 'Phone', 'Visits', 'Spend', 'Last visit', 'Birthday', 'Points', ''].map((c) => h('th', null, c)))),
+        h('tbody', null, s.top.map((c) => h('tr', null,
+          h('td', null, c.name ?? '—'), h('td', { dir: 'ltr' }, c.phone), h('td', null, c.visits), h('td', null, fm(c.spend_minor)),
+          h('td', null, new Date(c.last_visit).toLocaleDateString()), h('td', null, c.birthday ?? '—'), h('td', null, c.points),
+          h('td', null, h('button', { class: 'btn ghost sm', onclick: () => pointsDialog(c) }, 'Points'))))))
+        : h('p', { class: 'muted' }, 'No signed-in customers yet.')));
+}
+
+function pointsDialog(c) {
+  const pts = h('input', { inputmode: 'numeric', placeholder: 'e.g. 50 or -20' });
+  const why = h('input', { placeholder: 'Reason', maxlength: 120 });
+  const out = h('p', { class: 'note' });
+  const dlg = h('div', { class: 'scrim' }, h('div', { class: 'card modal' },
+    h('h2', null, `Adjust points · ${c.name ?? ''}`), pts, why,
+    h('div', { class: 'row gap' },
+      h('button', { class: 'btn ghost sm', onclick: () => dlg.remove() }, 'Cancel'),
+      h('button', { class: 'btn primary sm', onclick: async () => {
+        try { await api('POST', `/api/admin/customers/${c.id}/points`, { points: Number(pts.value), reason: why.value }); dlg.remove(); render(); } catch (e) { msg(out, e.code || 'Check the values'); }
+      } }, 'Save')), out));
+  document.body.append(dlg);
+}
+
+// ---------- campaigns & coupons
+async function viewCampaigns() {
+  if (me.role === 'staff') return h('p', { class: 'card' }, 'Managers only.');
+  const { campaigns } = await api('GET', '/api/admin/campaigns');
+  const f = {
+    name: h('input', { placeholder: 'Campaign name (shown to the diner)', maxlength: 80 }),
+    kind: h('select', null, h('option', { value: 'fixed' }, 'Fixed amount off'), h('option', { value: 'percent' }, '% off'), h('option', { value: 'free_item' }, 'Free item')),
+    value: h('input', { placeholder: 'Value: amount (e.g. 10.00) or % (e.g. 15)', inputmode: 'decimal' }),
+    item: h('input', { placeholder: 'Free item name — exactly as on the bill' }),
+    cap: h('input', { placeholder: 'Max discount (optional)', inputmode: 'decimal' }),
+    min: h('input', { placeholder: 'Minimum spend (optional)', inputmode: 'decimal' }),
+    audience: h('select', null,
+      h('option', { value: 'all' }, 'All my customers'),
+      h('option', { value: 'frequent' }, 'Frequent customers (min visits)'),
+      h('option', { value: 'lapsed' }, "Haven't visited for N days"),
+      h('option', { value: 'birthday' }, 'Birthday (automatic, N days before)')),
+    param: h('input', { placeholder: 'N (visits / days) — optional', inputmode: 'numeric' }),
+    days: h('input', { placeholder: 'Valid for (days), default 14', inputmode: 'numeric' }),
+  };
+  const out = h('p', { class: 'note' });
+  const audienceText = { all: 'All customers', frequent: 'Frequent', lapsed: 'Lapsed', birthday: 'Birthday (auto)' };
+  const val = (c) => (c.kind === 'percent' ? `${c.value}%` : c.kind === 'free_item' ? `Free ${c.item_name}` : fm(c.value));
+  return h('div', { class: 'grid' },
+    h('div', { class: 'card form' }, h('h3', null, 'New coupon campaign'),
+      h('p', { class: 'muted' }, 'Coupons go straight to each customer\'s account and are applied at payment. Customers who opted in also get a WhatsApp message.'),
+      Object.values(f),
+      h('button', { class: 'btn primary sm', onclick: async () => {
+        try {
+          const kind = f.kind.value;
+          const body = {
+            name: f.name.value, kind, audience: f.audience.value,
+            value: kind === 'percent' ? Number(f.value.value) : parseMajor(f.value.value || f.cap.value, cur()),
+            ...(kind === 'free_item' ? { item_name: f.item.value } : {}),
+            ...(f.cap.value && kind === 'percent' ? { max_minor: parseMajor(f.cap.value, cur()) } : {}),
+            ...(f.min.value ? { min_spend_minor: parseMajor(f.min.value, cur()) } : {}),
+            ...(f.param.value ? { audience_param: Number(f.param.value) } : {}),
+            ...(f.days.value ? { valid_days: Number(f.days.value) } : {}),
+          };
+          const r = await api('POST', '/api/admin/campaigns', body);
+          msg(out, `Created — ${r.issued} coupons issued now.`, true);
+          setTimeout(render, 1200);
+        } catch (e) { msg(out, e.code || 'Check the values'); }
+      } }, 'Create & send'), out),
+    h('div', { class: 'card' }, h('h3', null, 'Campaigns'),
+      campaigns.length ? h('table', null,
+        h('thead', null, h('tr', null, ['Name', 'Offer', 'Audience', 'Issued', 'Used', ''].map((c) => h('th', null, c)))),
+        h('tbody', null, campaigns.map((c) => h('tr', null,
+          h('td', null, c.name), h('td', null, val(c)), h('td', null, audienceText[c.audience]), h('td', null, c.issued), h('td', null, c.redeemed),
+          h('td', null, h('button', { class: 'btn ghost sm', onclick: async () => { await api('POST', `/api/admin/campaigns/${c.id}/toggle`, {}); render(); } }, c.active ? 'Pause' : 'Resume'))))))
+        : h('p', { class: 'muted' }, 'No campaigns yet.')));
+}
+
+// ---------- ratings
+async function viewRatings() {
+  if (me.role === 'staff') return h('p', { class: 'card' }, 'Managers only.');
+  const { ratings } = await api('GET', '/api/admin/ratings');
+  const avg = ratings.length ? (ratings.reduce((s, r) => s + r.stars, 0) / ratings.length).toFixed(2) : '—';
+  return h('div', { class: 'grid' },
+    h('div', { class: 'card wide' }, h('h3', null, `Ratings · average ${avg} ★ (${ratings.length})`),
+      h('p', { class: 'muted' }, 'Every diner is invited to review you on Google after rating, whatever their score (Google forbids asking only happy customers).'),
+      ratings.length ? h('table', null, h('tbody', null, ratings.map((r) => h('tr', null,
+        h('td', null, '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars)), h('td', null, r.comment ?? ''), h('td', null, r.name ?? '—'),
+        h('td', null, r.table_label), h('td', null, new Date(r.created_at).toLocaleString())))))
+        : h('p', { class: 'muted' }, 'No ratings yet.')));
+}
+
+async function restaurantSettingsCard() {
+  const st = await api('GET', '/api/admin/settings');
+  const g = h('input', { placeholder: 'https://g.page/r/…/review', value: st.google_review_url ?? '' });
+  const req = h('input', { type: 'checkbox', checked: st.require_phone });
+  const loy = h('input', { type: 'checkbox', checked: st.loyalty_enabled });
+  const ppu = h('input', { inputmode: 'numeric', value: st.points_per_unit });
+  const out = h('p', { class: 'note' });
+  return h('div', { class: 'card form' }, h('h3', null, 'Restaurant settings'),
+    h('label', null, 'Google review link', g),
+    h('label', { class: 'check' }, req, 'Diners must sign in with WhatsApp before paying'),
+    h('label', { class: 'check' }, loy, 'Loyalty points enabled'),
+    h('label', null, `Points per 1 ${st.currency}`, ppu),
+    h('button', { class: 'btn primary sm', onclick: async () => {
+      try {
+        await api('PUT', '/api/admin/settings', { google_review_url: g.value.trim() || null, require_phone: req.checked, loyalty_enabled: loy.checked, points_per_unit: Number(ppu.value) });
+        msg(out, 'Saved', true);
+      } catch (e) { msg(out, e.code || 'Check the values'); }
+    } }, 'Save'), out);
 }

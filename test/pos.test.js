@@ -81,6 +81,7 @@ before(async () => {
   pool = createPool(config.DATABASE_URL);
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   seeded = await seed(pool, { ownerPassword: 'CorrectHorse2026', quiet: true });
+  await pool.query('UPDATE restaurants SET require_phone = false'); // these suites test payments without diner sign-in
   app = await buildApp({ config, pool, logger: false });
   ctx = app.ctx;
   const login = await app.inject({ method: 'POST', url: '/api/admin/login', headers: ORIGIN, payload: { email: 'owner@sahab.example', password: 'CorrectHorse2026' } });

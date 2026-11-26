@@ -39,6 +39,14 @@ function fresh() {
     },
     payments: [],
     idem: new Map(),
+    customer: null,      // signed-in diner
+    otp: null,
+    points: 0,
+    coupons: [
+      { id: 'k1', name: 'عرض الترحيب · Welcome', kind: 'percent', value: 15, max_minor: 3000, min_spend_minor: null, item_name: null, valid_until: new Date(Date.now() + 10 * 864e5).toISOString(), restaurant_en: 'Sahab Café', restaurant_ar: 'مقهى سحاب', currency: 'AED' },
+      { id: 'k2', name: 'قهوتك علينا · Free latte', kind: 'free_item', value: 5000, item_name: 'Spanish Latte Hot', max_minor: null, min_spend_minor: null, valid_until: new Date(Date.now() + 5 * 864e5).toISOString(), restaurant_en: 'Sahab Café', restaurant_ar: 'مقهى سحاب', currency: 'AED' },
+    ],
+    orders: [],
   };
 }
 db = fresh();
@@ -59,6 +67,16 @@ const err = (code, status = 422) => Object.assign(new Error(code), { code, statu
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
 function resolveOffer(body) {
+  if (body.coupon_id) {
+    const k = db.coupons.find((x) => x.id === body.coupon_id);
+    if (!k) throw err('COUPON_INVALID');
+    if (k.kind === 'free_item') {
+      const it = db.bill.items.find((i) => i.name_en === k.item_name);
+      if (!it) throw err('COUPON_ITEM_NOT_ON_BILL');
+      return { kind: 'fixed', value: Math.min(it.unit_price_minor, k.value) };
+    }
+    return k;
+  }
   if (body.offer_id) {
     const o = db.offers.find((x) => x.id === body.offer_id);
     if (!o) throw err('OFFER_INVALID');
@@ -92,8 +110,41 @@ export const api = {
       restaurant: db.restaurant, table: db.table, policy: db.policy,
       offers: db.offers.map(({ bins, ...o }) => o),
       bill: db.closed ? null : b,
+      require_phone: true,
+      loyalty: { enabled: true, points_per_unit: 1 },
+      me: db.customer ? { name: db.customer.name, needs_profile: !db.customer.name, points: db.points, coupons: db.coupons } : null,
     };
   },
+  async otpRequest(country, phone) {
+    await wait(400);
+    const digits = String(phone).replace(/\D/g, '').replace(/^0+/, '');
+    if (digits.length < 8) throw err('INVALID_PHONE');
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    db.otp = { code, phone: `+${country}${digits}` };
+    return { challenge_id: 'demo', expires_in: 300, phone_hint: `+${country}•••${digits.slice(-3)}`, dev_code: code };
+  },
+  async otpVerify(_id, code) {
+    await wait(400);
+    if (!db.otp || code !== db.otp.code) throw err('INVALID_CODE');
+    db.customer = db.customer ?? { phone: db.otp.phone, name: null };
+    return { needs_profile: !db.customer.name };
+  },
+  async saveProfile(p) {
+    await wait(300);
+    Object.assign(db.customer, p);
+    return { customer: db.customer };
+  },
+  async me() {
+    await wait(200);
+    return {
+      customer: { name: db.customer.name, phone: db.customer.phone },
+      points: db.points ? [{ name_en: 'Sahab Café', name_ar: 'مقهى سحاب', points: db.points }] : [],
+      coupons: db.coupons, orders: db.orders,
+    };
+  },
+  async logout() { db.customer = null; return {}; },
+  async deleteMe() { db.customer = null; db.points = 0; db.orders = []; return {}; },
+  async rate() { await wait(300); return { ok: true, google_review_url: 'https://www.google.com/maps' }; },
   async quote(_t, body) {
     await wait();
     return serverQuote(body);
@@ -108,7 +159,8 @@ export const api = {
     }
     const q = serverQuote(body);
     const offer = body.offer_id ? db.offers.find((o) => o.id === body.offer_id) : null;
-    const p = { id: crypto.randomUUID(), status: 'pending', ...q, bins: offer?.bins ?? null, expires: Date.now() + 15 * 60_000 };
+    if (!db.customer) throw err('SIGN_IN_REQUIRED', 401);
+    const p = { id: crypto.randomUUID(), status: 'pending', ...q, coupon_id: body.coupon_id ?? null, bins: offer?.bins ?? null, expires: Date.now() + 15 * 60_000 };
     db.payments.push(p);
     db.idem.set(key, { sig, id: p.id });
     return { payment_id: p.id, redirect_url: `demo:${p.id}` };
@@ -117,7 +169,7 @@ export const api = {
     await wait(300);
     const p = db.payments.find((x) => x.id === id);
     if (!p) throw err('NOT_FOUND', 404);
-    return { ...p, name_en: db.restaurant.name_en, name_ar: db.restaurant.name_ar, public_token: TOKEN };
+    return { ...p, name_en: db.restaurant.name_en, name_ar: db.restaurant.name_ar, public_token: TOKEN, google_review_url: 'https://www.google.com/maps', rated: false };
   },
   reset() { db = fresh(); },
   go(url) {
@@ -153,6 +205,12 @@ function hostedPage(p) {
   document.body.append(scrim);
   const finish = (status, card) => {
     p.status = status;
+    if (status === 'captured') {
+      p.points_earned = Math.floor((p.share_minor - p.discount_minor) / 100);
+      db.points += p.points_earned;
+      if (p.coupon_id) db.coupons = db.coupons.filter((k) => k.id !== p.coupon_id);
+      db.orders.unshift({ id: p.id, captured_at: new Date().toISOString(), currency: 'AED', total_minor: p.total_minor, name_en: 'Sahab Café', name_ar: 'مقهى سحاب', points: p.points_earned });
+    }
     if (card) { p.card_brand = card.startsWith('5') ? 'MASTERCARD' : 'VISA'; p.card_last4 = card.slice(-4); }
     if (status === 'captured' && billState().remaining_minor <= 0) db.closed = true;
     scrim.remove();

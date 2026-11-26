@@ -7,6 +7,9 @@ pg.types.setTypeParser(20, (v) => {
   return n;
 });
 
+// DATE -> 'YYYY-MM-DD' string. Converting to a JS Date would shift it by the server's timezone.
+pg.types.setTypeParser(1082, (v) => v);
+
 export function createPool(url) {
   const ssl =
     /sslmode=require/.test(url) || process.env.PGSSL === 'true' ? { rejectUnauthorized: true } : undefined;

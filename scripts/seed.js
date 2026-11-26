@@ -91,6 +91,21 @@ export async function seed(pool, { ownerPassword, quiet = false } = {}) {
       [r.id],
     );
 
+    // Sample plans + subscriptions (managed from the platform console).
+    const plan = async (name, price, cur) => (await c.query(
+      `INSERT INTO plans(name, price_minor, currency, interval, features)
+       SELECT $1,$2,$3,'month','["QR pay","Split bill","CRM & coupons"]' WHERE NOT EXISTS (SELECT 1 FROM plans WHERE name = $1 AND currency = $3)
+       RETURNING id`, [name, price, cur])).rows[0]?.id
+      ?? (await c.query('SELECT id FROM plans WHERE name = $1 AND currency = $2', [name, cur])).rows[0].id;
+    const aed = await plan('Pro', 49900, 'AED');
+    const omr = await plan('Pro', 4900, 'OMR');
+    for (const [rid, pid] of [[r.id, aed], [r2.id, omr]]) {
+      await c.query(
+        `INSERT INTO subscriptions(restaurant_id, plan_id, status, current_period_end) VALUES ($1,$2,'active', current_date + 30)
+         ON CONFLICT (restaurant_id) DO NOTHING`, [rid, pid],
+      );
+    }
+
     const pw = await hashPassword(ownerPassword);
     await c.query(
       `INSERT INTO users(restaurant_id, email, password_hash, role) VALUES ($1,'owner@sahab.example',$2,'owner')

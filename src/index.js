@@ -2,6 +2,7 @@ import { loadConfig } from './config.js';
 import { createPool } from './db.js';
 import { migrate } from './migrate.js';
 import { buildApp } from './server.js';
+import { bootstrapPlatformAdmin } from './routes/platform.js';
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
@@ -12,6 +13,7 @@ if (process.env.RUN_SEED === 'true') {
   await seed(pool, { ownerPassword: process.env.SEED_OWNER_PASSWORD });
 }
 const app = await buildApp({ config, pool });
+await bootstrapPlatformAdmin(pool, config, app.log);
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, async () => {

@@ -7,6 +7,8 @@ import { login, logout, publicUser, ROLE_RANK, sessionUser } from '../services/a
 import * as S from './schemas.js';
 import crypto from 'node:crypto';
 import integrationRoutes from './integrations.js';
+import crmRoutes from './crm.js';
+import platformRoutes from './platform.js';
 
 export default async function adminRoutes(app, { ctx }) {
   const { pool, config, cipher } = ctx;
@@ -54,7 +56,8 @@ export default async function adminRoutes(app, { ctx }) {
 
   app.get('/api/admin/me', { preHandler: auth('staff', { allowNoMfa: true }) }, async (req) => ({
     user: publicUser(req.user),
-    mfa_required: config.REQUIRE_2FA && !(req.user.totp_enabled && req.user.mfa_passed),
+    mfa_required: (config.REQUIRE_2FA || (req.user.role === 'platform_admin' && config.PLATFORM_REQUIRE_2FA))
+      && !(req.user.totp_enabled && req.user.mfa_passed),
   }));
 
   app.post('/api/admin/2fa/setup', { preHandler: auth('staff', { allowNoMfa: true }) }, async (req) => {
@@ -216,6 +219,8 @@ export default async function adminRoutes(app, { ctx }) {
   });
 
   await integrationRoutes(app, { ctx, auth, rid });
+  await crmRoutes(app, { ctx, auth, rid });
+  await platformRoutes(app, { ctx, auth });
 
   app.get('/api/admin/audit', { preHandler: auth('owner') }, async (req) => {
     const { rows } = await pool.query(

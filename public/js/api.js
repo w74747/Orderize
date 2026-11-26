@@ -23,6 +23,13 @@ export const api = {
   pay: (token, body, idemKey) =>
     req('POST', `/api/t/${encodeURIComponent(token)}/payments`, body, { 'idempotency-key': idemKey }),
   payment: (id) => req('GET', `/api/payments/${encodeURIComponent(id)}`),
+  otpRequest: (country, phone) => req('POST', '/api/me/otp', { country, phone }),
+  otpVerify: (challenge_id, code) => req('POST', '/api/me/otp/verify', { challenge_id, code }),
+  saveProfile: (p) => req('PUT', '/api/me/profile', p),
+  me: () => req('GET', '/api/me'),
+  logout: () => req('POST', '/api/me/logout', {}),
+  deleteMe: () => req('DELETE', '/api/me'),
+  rate: (id, stars, comment) => req('POST', `/api/payments/${encodeURIComponent(id)}/rating`, { stars, ...(comment ? { comment } : {}) }),
   /** Only follow redirects to https or our own origin (defence against open redirects). */
   go(url) {
     const u = new URL(url, location.href);

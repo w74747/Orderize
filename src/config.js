@@ -29,6 +29,19 @@ const schema = z
     FOODICS_API_BASE: z.string().optional(),      // tests only
     FOODICS_CONSOLE_BASE: z.string().optional(),  // tests only
     ALLOW_PRIVATE_POS_HOSTS: z.enum(['true', 'false']).default('false'), // tests only
+    // WhatsApp Cloud API (diner sign-in codes, coupon notifications)
+    WHATSAPP_TOKEN: z.string().optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    WHATSAPP_API_VERSION: z.string().regex(/^v\d+\.\d+$/).default('v21.0'),
+    WHATSAPP_OTP_TEMPLATE: z.string().default('sufra_otp'),
+    WHATSAPP_OTP_LANG: z.string().default('ar'),
+    WHATSAPP_COUPON_TEMPLATE: z.string().optional(),
+    // DEMO ONLY: return the sign-in code in the API response when WhatsApp isn't configured.
+    OTP_DEV_ECHO: bool.default(false),
+    // First platform administrator, created at boot if none exists.
+    PLATFORM_ADMIN_EMAIL: z.email().optional(),
+    PLATFORM_ADMIN_PASSWORD: z.string().min(12).optional(),
+    PLATFORM_REQUIRE_2FA: bool.default(true),
     RESERVATION_TTL_MIN: z.coerce.number().int().min(5).max(60).default(15),
     LOG_LEVEL: z.string().default('info'),
   })
@@ -44,6 +57,12 @@ const schema = z
     }
     if (c.NODE_ENV === 'production' && (c.ALLOW_PRIVATE_POS_HOSTS === 'true' || c.FOODICS_API_BASE)) {
       ctx.addIssue({ code: 'custom', message: 'POS test overrides are not allowed in production' });
+    }
+    if (c.NODE_ENV === 'production' && c.OTP_DEV_ECHO && process.env.ALLOW_SANDBOX_IN_PRODUCTION !== 'true') {
+      ctx.addIssue({ code: 'custom', message: 'OTP_DEV_ECHO is a demo setting and is refused in real production' });
+    }
+    if (c.OTP_DEV_ECHO && c.WHATSAPP_TOKEN) {
+      ctx.addIssue({ code: 'custom', message: 'OTP_DEV_ECHO must be off when WhatsApp is configured' });
     }
     if (c.PAYMENT_PROVIDER === 'tap' && (!c.TAP_SECRET_KEY || !c.TAP_WEBHOOK_SECRET)) {
       ctx.addIssue({ code: 'custom', message: 'TAP_SECRET_KEY and TAP_WEBHOOK_SECRET are required' });

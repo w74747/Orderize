@@ -46,3 +46,8 @@ th, td { text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--lin
 .form { gap: 8px; }
 .secret:empty { display: none; }
 .wide { grid-column: 1 / -1; }
+.bar-row { display: grid; grid-template-columns: 80px 1fr 40px; gap: 10px; align-items: center; }
+.bar { background: var(--soft); border-radius: 6px; height: 12px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: #0b4f7c; border-radius: 6px; }
+label.check { display: flex; gap: 8px; align-items: center; color: var(--ink); }
+label.check input { width: auto; }

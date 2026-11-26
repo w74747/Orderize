@@ -14,6 +14,9 @@ const S = {
   tip: null,
   offerId: null,
   promo: null, // { code, quote }
+  coupon: null, // { id, quote }
+  auth: { country: null, phone: '', challenge: null, hint: '', devCode: null, sentAt: 0, code: '', profile: { name: '', gender: '', birth_date: '', marketing_consent: false } },
+  account: null,
   consent: false,
   showItems: false,
   sheet: null,
@@ -65,7 +68,7 @@ const I = {
   receipt: 'M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6', menu: 'M4 3v8a3 3 0 003 3v7M10 3v8M7 3v8M17 3c-2 2-2 6 0 8v10',
   users: 'M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM22 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
   tag: 'M20.6 13.4L13.4 20.6a2 2 0 01-2.8 0L2 12V2h10l8.6 8.6a2 2 0 010 2.8zM7 7h.01', lock: 'M5 11h14v10H5zM8 11V7a4 4 0 018 0v4',
-  check: 'M20 6L9 17l-5-5', x: 'M18 6L6 18M6 6l12 12', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
+  check: 'M20 6L9 17l-5-5', user: 'M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z', star: 'M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z', gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z', x: 'M18 6L6 18M6 6l12 12', plus: 'M12 5v14M5 12h14', minus: 'M5 12h14', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z',
 };
 
 // ---------- money logic (display only — the server recomputes everything)
@@ -79,6 +82,7 @@ function payBody() {
     tip: S.tip ?? { type: 'none' },
     ...(S.offerId ? { offer_id: S.offerId } : {}),
     ...(S.promo ? { promo_code: S.promo.code } : {}),
+    ...(S.coupon ? { coupon_id: S.coupon.id } : {}),
     marketing_consent: S.consent,
   };
 }
@@ -86,10 +90,11 @@ function currentQuote() {
   const offer = S.offerId ? S.data.offers.find((o) => o.id === S.offerId) : null;
   try {
     const q = quote(billForCalc(), payBody(), S.data.policy, offer);
-    if (S.promo?.quote) {
-      // Promo discount comes from the server; recompute fee/total around it.
-      const d = Math.min(S.promo.quote.discount_minor, q.share_minor - 1);
-      const fee = S.promo.quote.share_minor === q.share_minor ? S.promo.quote.fee_minor : q.fee_minor;
+    const sq = S.promo?.quote || S.coupon?.quote;
+    if (sq) {
+      // Promo / coupon discounts come from the server; recompute fee/total around them.
+      const d = Math.min(sq.discount_minor, q.share_minor - 1);
+      const fee = sq.share_minor === q.share_minor ? sq.fee_minor : q.fee_minor;
       return { ...q, discount_minor: d, fee_minor: fee, total_minor: q.share_minor - d + fee + q.tip_minor };
     }
     return q;
@@ -100,11 +105,13 @@ function currentQuote() {
 }
 
 async function refreshPromo() {
-  if (!S.promo) return;
+  const holder = S.promo || S.coupon;
+  if (!holder) return;
   try {
-    S.promo.quote = await api.quote(S.token, payBody());
+    holder.quote = await api.quote(S.token, payBody());
   } catch (e) {
     S.promo = null;
+    S.coupon = null;
     toast(errText(e.code));
   }
   render();
@@ -122,8 +129,11 @@ function topBar({ back } = {}) {
   return h('header', { class: 'top' },
     back ? h('button', { class: 'icon-btn', 'aria-label': t('back'), onclick: back }, icon(I.back)) : h('span'),
     back ? h('div', { class: 'top-title' }, nm(S.data.restaurant)) : h('span'),
-    h('button', { class: 'pill', onclick: () => { S.lang = S.lang === 'ar' ? 'en' : 'ar'; saveLang(S.lang); render(); } },
-      icon(I.globe, 16), S.lang === 'ar' ? 'EN' : 'ع'),
+    h('div', { class: 'row gap' },
+      S.data?.me ? h('button', { class: 'pill', 'aria-label': t('myAccount'), onclick: () => openAccount() }, icon(I.user, 16),
+        S.data.restaurant && S.data.loyalty?.enabled ? `${S.data.me.points} ${t('points')}` : t('myAccount')) : null,
+      h('button', { class: 'pill', onclick: () => { S.lang = S.lang === 'ar' ? 'en' : 'ar'; saveLang(S.lang); render(); } },
+        icon(I.globe, 16), S.lang === 'ar' ? 'EN' : 'ع')),
   );
 }
 
@@ -134,6 +144,7 @@ function offerCard(o, { compact } = {}) {
     onclick: () => {
       S.offerId = on ? null : o.id;
       S.promo = null;
+      S.coupon = null;
       if (S.view === 'home') S.view = 'pay';
       render();
     },
@@ -252,6 +263,11 @@ function viewPay() {
       h('button', { class: 'row-btn', onclick: () => openSheet('tip') }, icon(I.edit, 18),
         h('span', { class: 'grow' }, S.tip?.type === 'amount' ? `${t('customTip')}: ${money(S.tip.amount_minor)}` : t('customTip')), icon(I.plus, 18)),
     ),
+
+    S.data.me?.coupons?.length ? h('section', { class: 'card' },
+      h('h2', null, t('yourCoupons')),
+      h('div', { class: 'carousel' }, S.data.me.coupons.map((k) => couponCard(k))),
+    ) : null,
 
     S.data.offers.length ? h('section', { class: 'card' },
       h('h2', null, t('bankOffers')),
@@ -376,6 +392,7 @@ function sheetPromo() {
     h('button', { class: 'btn primary big', onclick: async () => {
       if (!/^[A-Za-z0-9-]{3,32}$/.test(d.code)) return toast(errText('OFFER_INVALID'));
       S.offerId = null;
+      S.coupon = null;
       S.promo = { code: d.code.toUpperCase() };
       closeSheet();
       await refreshPromo();
@@ -384,7 +401,7 @@ function sheetPromo() {
 
 function afterChange() {
   render();
-  if (S.promo) refreshPromo();
+  if (S.promo || S.coupon) refreshPromo();
 }
 
 // ---------- payment
@@ -431,10 +448,181 @@ async function viewReturn(id) {
       h('div', { class: 'row' }, h('span', null, t('tip')), h('span', { class: 'num' }, fm(p.tip_minor))),
       h('div', { class: 'row total' }, h('strong', null, t('youPay')), h('strong', { class: 'num' }, fm(p.total_minor))),
       p.card_last4 ? h('small', { class: 'muted' }, `${t('card')}: ${p.card_brand ?? ''} •••• ${p.card_last4}`) : null,
+      p.points_earned ? h('div', { class: 'row good' }, h('span', null, t('pointsEarned')), h('strong', null, `+${p.points_earned}`)) : null,
     ) : null,
+    ok ? ratingBlock(p) : null,
     p?.public_token ? h('button', { class: 'btn primary big', onclick: () => { if (!api.demo) history.replaceState(null, '', `/t/${p.public_token}`); boot(); } },
       ok ? t('backToBill') : t('tryAgain')) : null,
   ));
+}
+
+
+// ---------- diner identity (WhatsApp sign-in), coupons, account
+const COUNTRY_BY_CURRENCY = { AED: '971', SAR: '966', QAR: '974', KWD: '965', BHD: '973', OMR: '968' };
+const COUNTRIES = [['971', '🇦🇪 +971'], ['966', '🇸🇦 +966'], ['974', '🇶🇦 +974'], ['965', '🇰🇼 +965'], ['973', '🇧🇭 +973'], ['968', '🇴🇲 +968']];
+
+function couponTitle(k) {
+  const cur = S.data?.restaurant?.currency ?? k.currency;
+  if (k.kind === 'free_item') return `${k.item_name} · ${t('free')}`;
+  if (k.kind === 'percent') return `${k.value}% ${t('off')}${k.max_minor ? ` · ${t('upTo')} ${formatMoney(Number(k.max_minor), cur, S.lang)}` : ''}`;
+  return `${formatMoney(Number(k.value), cur, S.lang)} ${t('off')}`;
+}
+
+function couponCard(k) {
+  const on = S.coupon?.id === k.id;
+  return h('button', {
+    class: `offer theme-green ${on ? 'on' : ''}`,
+    onclick: () => {
+      S.coupon = on ? null : { id: k.id };
+      S.offerId = null;
+      S.promo = null;
+      afterChange();
+    },
+  },
+  h('span', { class: 'offer-bank' }, k.name),
+  h('span', { class: 'offer-title' }, couponTitle(k)),
+  h('span', { class: 'offer-cta' }, on ? [icon(I.check, 14), t('applied')] : [t('apply'), icon(I.chev, 14)]));
+}
+
+function authShell(title, sub, ...body) {
+  return h('div', { class: 'page' },
+    topBar(),
+    h('section', { class: 'card auth' },
+      h('div', { class: 'auth-icon' }, icon(I.lock, 26)),
+      h('h1', null, title), sub ? h('p', { class: 'muted' }, sub) : null, ...body,
+      h('small', { class: 'muted' }, t('privacy'))));
+}
+
+function viewLogin() {
+  const a = S.auth;
+  a.country ??= COUNTRY_BY_CURRENCY[S.data.restaurant.currency] ?? '971';
+  const sel = h('select', { class: 'cc', 'aria-label': 'country', onchange: (e) => { a.country = e.target.value; } },
+    COUNTRIES.map(([v, l]) => h('option', { value: v, selected: v === a.country }, l)));
+  const inp = h('input', { inputmode: 'tel', autocomplete: 'tel-national', placeholder: '5x xxx xxxx', value: a.phone, dir: 'ltr', oninput: (e) => { a.phone = e.target.value; } });
+  const send = async () => {
+    if (S.busy) return;
+    S.busy = true;
+    try {
+      const r = await api.otpRequest(a.country, a.phone);
+      Object.assign(a, { challenge: r.challenge_id, hint: r.phone_hint, devCode: r.dev_code ?? null, sentAt: Date.now(), code: '' });
+      S.view = 'otp';
+    } catch (e) { toast(errText(e.code)); }
+    S.busy = false;
+    render();
+  };
+  return authShell(t('signInTitle'), t('signInSub'),
+    h('label', { class: 'field' }, t('phone'), h('div', { class: 'phone-row', dir: 'ltr' }, sel, inp)),
+    h('button', { class: 'btn primary big', disabled: S.busy, onclick: send }, t('sendCode')));
+}
+
+function viewOtp() {
+  const a = S.auth;
+  const wait = Math.max(0, 45 - Math.floor((Date.now() - a.sentAt) / 1000));
+  if (wait > 0) { clearTimeout(viewOtp.t); viewOtp.t = setTimeout(() => S.view === 'otp' && render(), 1000); }
+  const inp = h('input', {
+    class: 'otp', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, dir: 'ltr', value: a.code, placeholder: '••••••',
+    oninput: (e) => { a.code = e.target.value.replace(/\D/g, '').slice(0, 6); e.target.value = a.code; if (a.code.length === 6) verify(); },
+  });
+  async function verify() {
+    if (S.busy || a.code.length !== 6) return;
+    S.busy = true;
+    try {
+      const r = await api.otpVerify(a.challenge, a.code);
+      S.view = r.needs_profile ? 'profile' : 'home';
+      await load();
+    } catch (e) { toast(errText(e.code)); a.code = ''; }
+    S.busy = false;
+    render();
+  }
+  setTimeout(() => inp.focus(), 50);
+  return authShell(t('codeTitle'), [t('codeSub'), ' ', h('bdi', { dir: 'ltr' }, a.hint)],
+    a.devCode ? h('p', { class: 'demo-flag' }, `${t('demoCode')} ${a.devCode}`) : null,
+    inp,
+    h('button', { class: 'btn primary big', disabled: S.busy || a.code.length !== 6, onclick: verify }, t('verify')),
+    h('div', { class: 'row' },
+      h('button', { class: 'link', onclick: () => { S.view = 'login'; render(); } }, t('changeNumber')),
+      h('button', { class: 'link', disabled: wait > 0, onclick: () => { S.view = 'login'; render(); } }, wait > 0 ? `${t('resendIn')} ${wait}s` : t('resend'))));
+}
+
+function viewProfile() {
+  const p = S.auth.profile;
+  const g = (v) => h('button', { class: `seg ${p.gender === v ? 'on' : ''}`, onclick: () => { p.gender = v; render(); } }, t(v));
+  const save = async () => {
+    try {
+      await api.saveProfile({ name: p.name.trim(), gender: p.gender, birth_date: p.birth_date, marketing_consent: p.marketing_consent });
+      S.view = 'home';
+      await load();
+    } catch (e) { toast(errText(e.code)); }
+  };
+  return authShell(t('profileTitle'), null,
+    h('label', { class: 'field' }, t('name'), h('input', { value: p.name, autocomplete: 'given-name', maxlength: 60, oninput: (e) => { p.name = e.target.value; } })),
+    h('div', { class: 'field' }, t('gender'), h('div', { class: 'segs' }, g('male'), g('female'))),
+    h('label', { class: 'field' }, t('birthDate'), h('input', { type: 'date', value: p.birth_date, max: new Date(Date.now() - 13 * 365.25 * 864e5).toISOString().slice(0, 10), onchange: (e) => { p.birth_date = e.target.value; render(); } }),
+      h('small', { class: 'muted' }, t('birthdayNote'))),
+    h('label', { class: 'consent' }, h('input', { type: 'checkbox', checked: p.marketing_consent, onchange: (e) => { p.marketing_consent = e.target.checked; } }), h('span', null, t('marketing'))),
+    h('button', { class: 'btn primary big', onclick: () => (p.name.trim().length >= 2 && p.gender && p.birth_date ? save() : toast(errText('VALIDATION_FAILED'))) }, t('continue')));
+}
+
+async function openAccount() {
+  try {
+    S.account = await api.me();
+    S.view = 'account';
+  } catch (e) { toast(errText(e.code)); }
+  render();
+  window.scrollTo(0, 0);
+}
+
+function viewAccount() {
+  const a = S.account;
+  const nm2 = (o) => (S.lang === 'ar' ? o.name_ar : o.name_en);
+  const date = (d) => new Date(d).toLocaleDateString(S.lang === 'ar' ? 'ar' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return h('div', { class: 'page' },
+    topBar({ back: () => { S.view = S.data.bill ? 'home' : 'home'; render(); } }),
+    h('section', { class: 'card' }, h('h2', null, `${t('hi')} ${a.customer.name ?? ''}`), h('small', { class: 'muted', dir: 'ltr' }, a.customer.phone)),
+    h('section', { class: 'card' }, h('h2', null, t('myPoints')),
+      a.points.length ? a.points.map((x) => h('div', { class: 'row' }, h('span', null, nm2(x)), h('strong', { class: 'num' }, `${x.points} ${t('points')}`)))
+        : h('p', { class: 'muted' }, '0')),
+    h('section', { class: 'card' }, h('h2', null, t('myCoupons')),
+      a.coupons.length ? a.coupons.map((k) => h('div', { class: 'coupon-row' },
+        icon(I.gift, 20),
+        h('div', { class: 'grow' }, h('strong', null, couponTitle(k)), h('small', { class: 'muted block' }, `${S.lang === 'ar' ? k.restaurant_ar : k.restaurant_en} · ${t('validUntil')} ${date(k.valid_until)}`))))
+        : h('p', { class: 'muted' }, t('noCoupons'))),
+    h('section', { class: 'card' }, h('h2', null, t('myOrders')),
+      a.orders.length ? a.orders.map((o) => h('div', { class: 'row' },
+        h('div', null, h('span', null, nm2(o)), h('small', { class: 'muted block' }, date(o.captured_at))),
+        h('div', { class: 'num' }, formatMoney(Number(o.total_minor), o.currency, S.lang), o.points ? h('small', { class: 'muted block' }, `+${o.points} ${t('points')}`) : null)))
+        : h('p', { class: 'muted' }, t('noOrders'))),
+    h('section', { class: 'card' },
+      h('button', { class: 'btn soft big', onclick: async () => { await api.logout(); S.account = null; S.view = 'login'; await load(); } }, t('signOut')),
+      h('button', { class: 'link danger', onclick: async () => { if (!confirm(t('deleteConfirm'))) return; await api.deleteMe(); S.account = null; S.view = 'login'; await load(); } }, t('deleteAccount'))));
+}
+
+function ratingBlock(p) {
+  if (p.rated) return null;
+  const box = h('section', { class: 'card rating' });
+  let stars = 0;
+  const comment = h('textarea', { maxlength: 1000, rows: 2, placeholder: t('rateComment') });
+  const draw = () => {
+    box.replaceChildren(
+      h('h2', null, t('rateTitle')),
+      h('div', { class: 'stars', role: 'radiogroup' }, [1, 2, 3, 4, 5].map((n) =>
+        h('button', { class: `star ${n <= stars ? 'on' : ''}`, 'aria-label': `${n}`, onclick: () => { stars = n; draw(); } }, icon(I.star, 32)))),
+      stars ? comment : null,
+      stars ? h('button', { class: 'btn primary', onclick: send }, t('send')) : null);
+  };
+  async function send() {
+    try {
+      const r = await api.rate(p.id, stars, comment.value.trim());
+      // The Google invitation is shown to everyone, whatever the rating (Google forbids review gating).
+      box.replaceChildren(h('h2', null, t('thanks')),
+        r.google_review_url && /^https:\/\//.test(r.google_review_url)
+          ? h('div', { class: 'google-ask' }, h('p', { class: 'muted' }, t('googleAsk')),
+            h('a', { class: 'btn soft', href: r.google_review_url, target: '_blank', rel: 'noopener noreferrer' }, t('googleBtn')))
+          : '');
+    } catch (e) { toast(errText(e.code)); }
+  }
+  draw();
+  return box;
 }
 
 // ---------- router / render
@@ -453,7 +641,7 @@ function render() {
   document.documentElement.lang = S.lang;
   document.documentElement.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
   document.documentElement.style.setProperty('--brand', S.data.restaurant.brand_color);
-  const view = { home: viewHome, menu: viewMenu, pay: viewPay }[S.view]();
+  const view = { home: viewHome, menu: viewMenu, pay: viewPay, login: viewLogin, otp: viewOtp, profile: viewProfile, account: viewAccount }[S.view]();
   const kids = [view];
   if (api.demo) kids.unshift(h('button', { class: 'demo-flag', onclick: () => { api.reset(); boot(); } },
     S.lang === 'ar' ? 'نسخة تجريبية — لا يتم خصم أموال حقيقية · اضغط لإعادة الضبط' : 'Demo — no real money is charged · tap to reset'));
@@ -471,6 +659,9 @@ async function load() {
   S.data = await api.getTable(S.token);
   // Drop selections that no longer make sense after a refresh.
   if (S.split.mode === 'items') S.split = { mode: 'full' };
+  if (S.data.me?.needs_profile) S.view = 'profile';
+  else if (S.data.require_phone && !S.data.me && !['otp', 'login'].includes(S.view)) S.view = 'login';
+  else if (S.data.me && ['login', 'otp', 'profile'].includes(S.view)) S.view = 'home';
   render();
 }
 
@@ -489,6 +680,7 @@ export async function boot() {
   S.tip = null;
   S.offerId = null;
   S.promo = null;
+  S.coupon = null;
   S.busy = false;
   S.sheet = null;
   S.idem = { body: '', key: '' };

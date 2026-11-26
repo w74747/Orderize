@@ -41,3 +41,21 @@
 4. Annual external penetration test plus PCI SAQ-A attestation.
 5. Data residency: check each country's rules (e.g. Saudi PDPL, UAE PDPL, Oman PDPL) on where diner data may be hosted.
 6. Alerts on `payments.flag IS NOT NULL` (mismatch, overpaid, bin_mismatch).
+
+## Diner accounts (WhatsApp sign-in)
+- 6-digit codes from a CSPRNG, stored only as an HMAC, valid 5 minutes, max 5 attempts, single use.
+- Limits: 1 code per 45 s and 3 per 10 min per number, 10 per hour per IP, plus route rate limits.
+- The sign-in response never reveals whether a number already has an account.
+- Diner session: 256-bit token (hash stored), `HttpOnly`, `Secure`, `SameSite=Lax`, 90 days; Origin check on every state change.
+- Restaurants never see full phone numbers (masked) and can only target diners who paid at **their** restaurant.
+- Marketing messages only to diners who opted in. Account deletion erases name, phone, gender and birth date and revokes coupons.
+- `OTP_DEV_ECHO` (returns the code in the response) is a demo-only switch: refused when WhatsApp is configured or in real production.
+
+## Coupons, points, ratings
+- Coupons belong to one diner and one restaurant, are locked during payment and redeemed atomically on capture (no double use).
+- One discount per payment (bank offer, promo code or coupon). Points are an append-only ledger, one entry per payment.
+- One rating per payment, by its own diner, within 48 h. The Google review invitation is shown to every diner regardless of rating (Google forbids review gating).
+
+## Platform console
+- Platform admins are a separate role with 2FA always required (`PLATFORM_REQUIRE_2FA`).
+- Suspending a restaurant switches off its QR codes and signs its staff out. Temporary owner passwords are shown once.

@@ -141,3 +141,38 @@ small { font-size: .8rem; }
 button.demo-flag { width: 100%; display: block; }
 .hosted { gap: 12px; }
 .hosted-amt { font-size: 2rem; font-weight: 800; margin: 0; }
+
+/* auth & account */
+.auth { text-align: center; justify-items: stretch; padding-top: 32px; }
+.auth h1 { font-size: 1.5rem; }
+.auth-icon { width: 56px; height: 56px; border-radius: 50%; background: #25d366; color: #fff; display: grid; place-items: center; justify-self: center; }
+.auth .field { text-align: start; }
+.phone-row { display: flex; gap: 8px; }
+.phone-row .cc, .field select { font: inherit; font-size: 1.05rem; padding: 14px 10px; border-radius: 14px; border: 1.5px solid var(--line); background: #fff; }
+.phone-row input { flex: 1; min-width: 0; }
+.otp { font: inherit; font-size: 2rem; letter-spacing: .5em; text-align: center; padding: 14px; border-radius: 16px; border: 1.5px solid var(--line); }
+.otp:focus { border-color: var(--ink); outline: none; }
+.segs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg { border: 1.5px solid var(--line); border-radius: 14px; padding: 14px; font-weight: 600; }
+.seg.on { border-color: var(--ink); background: var(--soft); }
+.coupon-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.link.danger { color: var(--bad); justify-self: center; }
+.rating { text-align: center; width: min(420px, 92vw); border: 1px solid var(--line); border-radius: var(--r); }
+.stars { display: flex; justify-content: center; gap: 6px; }
+.star { color: #c9ccd1; }
+.star.on { color: #f5a623; }
+.star.on svg path { fill: currentColor; }
+.rating textarea { font: inherit; padding: 12px; border-radius: 12px; border: 1.5px solid var(--line); resize: vertical; }
+.top .row.gap { display: flex; gap: 8px; }
+#app { overflow-x: clip; }
+.card, .auth > * { min-width: 0; }
+.otp, .auth input, .auth select { width: 100%; box-sizing: border-box; }
+.auth .row { flex-wrap: wrap; }
+.auth .phone-row .cc { width: auto; flex: 0 0 auto; }
+.auth .phone-row input { flex: 1 1 auto; width: auto; font: inherit; font-size: 1.2rem; padding: 14px; border-radius: 14px; border: 1.5px solid var(--line); }
+.google-ask { display: grid; gap: 10px; justify-items: center; }
+.pill { color: var(--ink); }
+.auth .phone-row input { min-width: 0; }
+a.btn { text-decoration: none; color: var(--ink); }
+.auth .phone-row { min-width: 0; width: 100%; }
+.auth .phone-row input { width: 0; flex: 1 1 0; }
