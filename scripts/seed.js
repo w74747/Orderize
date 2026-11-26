@@ -4,7 +4,9 @@ import { createPool, tx } from '../src/db.js';
 import { migrate } from '../src/migrate.js';
 import { hashPassword, randomToken } from '../src/lib/crypto.js';
 
-export async function seed(pool, { ownerPassword = randomToken(12), quiet = false } = {}) {
+export async function seed(pool, { ownerPassword, quiet = false } = {}) {
+  const generated = !ownerPassword;
+  if (generated) ownerPassword = randomToken(12);
   await migrate(pool);
   return tx(pool, async (c) => {
     const menu = [
@@ -99,7 +101,7 @@ export async function seed(pool, { ownerPassword = randomToken(12), quiet = fals
       console.log('\nSeeded.');
       console.log(`  Diner (AED):  /t/${demoToken}`);
       console.log(`  Diner (OMR):  /t/${omrToken}`);
-      console.log(`  Admin:        /admin  owner@sahab.example / ${ownerPassword}\n`);
+      console.log(`  Admin:        /admin  owner@sahab.example / ${generated ? ownerPassword : '(from SEED_OWNER_PASSWORD)'}\n`);
     }
     return { demoToken, omrToken, ownerPassword, restaurantId: r.id };
   });
